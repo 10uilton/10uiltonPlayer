@@ -1,0 +1,3748 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#10161a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>
+  // vh/dvh calculam errado em muitos navegadores/webviews quando a barra de
+  // endereço está visível. Medimos a altura real via JS e guardamos em --vh,
+  // que é sempre precisa e atualizada quando a barra aparece/some ou o
+  // teclado abre.
+  (function () {
+    function setVH() {
+      var h = (window.visualViewport ? window.visualViewport.height : window.innerHeight);
+      document.documentElement.style.setProperty('--vh', (h * 0.01) + 'px');
+    }
+    setVH();
+    window.addEventListener('resize', setVH);
+    window.addEventListener('orientationchange', setVH);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', setVH);
+    }
+  })();
+</script>
+<title>10uilton Player</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Space+Mono:wght@400;700&family=Bungee+Shade&family=Rubik+Spray+Paint&display=swap');
+
+  :root{
+    --bg: #10161a;
+    --bg-2: #182229;
+    --amber: #e8a94c;
+    --cream: #ede6d6;
+    --teal: #3e5c55;
+    --red: #c1443d;
+    /* Largura compartilhada da TV e do toca-discos: sempre iguais */
+    --deck-w: clamp(240px, min(88vw, calc(var(--vh, 1vh) * 40)), 360px);
+    --btn-size: clamp(30px, calc(var(--deck-w) * 0.125), 46px);
+    --play-size: clamp(42px, calc(var(--deck-w) * 0.175), 64px);
+  }
+
+  *{ box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body{
+    height: 100%;
+    width: 100%;
+    overscroll-behavior: none;
+    overflow: hidden;
+  }
+
+  body{
+    margin:0;
+    height: calc(var(--vh, 1vh) * 100);
+    width: 100vw;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 50% -10%, #1c262d 0%, var(--bg) 60%);
+    color: var(--cream);
+    font-family: 'Space Mono', monospace;
+    -webkit-user-select: none;
+    user-select: none;
+    /* Respeita notch, barra de status e barra de gestos do Android */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  .topbar{
+    position: relative;
+    flex-shrink: 0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 18px 60px 6px 16px;
+    z-index: 20;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,0.03), rgba(255,255,255,0) 40%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 26px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 2px, transparent 2px, transparent 90px);
+  }
+  .topbar h1{
+    font-family:'Rubik Spray Paint', 'Bungee Shade', cursive;
+    font-weight:400;
+    font-size: clamp(1.2rem, 6.8vw, 1.8rem);
+    letter-spacing: 0.03em;
+    margin:0;
+    text-transform: uppercase;
+    line-height: 1.15;
+    text-align:center;
+    animation: neonFlicker 2.6s infinite ease-in-out;
+  }
+  .topbar h1 .gl{
+    -webkit-text-stroke: 2.5px #000000;
+    paint-order: stroke fill;
+    text-shadow:
+      1.5px 1.5px 0 #000,
+      -1.5px -1.5px 0 #000,
+      1.5px -1.5px 0 #000,
+      -1.5px 1.5px 0 #000,
+      0 0 5px currentColor,
+      0 0 12px currentColor,
+      0 0 24px currentColor,
+      0 0 38px currentColor;
+  }
+  @keyframes neonFlicker{
+    0%, 100%{ opacity: 1; }
+    92%{ opacity: 1; }
+    93%{ opacity: 0.82; }
+    94%{ opacity: 1; }
+    96%{ opacity: 0.88; }
+    97%{ opacity: 1; }
+  }
+
+  .menu-btn{
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    border: 1px solid var(--teal);
+    background: var(--bg-2);
+    color: var(--cream);
+    font-size: 1.1rem;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    transition: 0.2s;
+  }
+  .menu-btn:hover{ border-color: var(--amber); color: var(--amber); }
+
+  .back-btn{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:none;
+    border:1px solid var(--teal);
+    color: var(--cream);
+    font-family:'Space Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  .back-btn:hover{ border-color: var(--amber); color: var(--amber); }
+
+  /* Dropdown menu */
+  .menu-overlay{
+    position: fixed; inset:0;
+    background: rgba(6,9,10,0.55);
+    display:none;
+    z-index: 40;
+  }
+  .menu-overlay.open{ display:block; }
+
+  .menu-panel{
+    position:absolute;
+    top: 66px; right: 16px;
+    width: 190px;
+    background: var(--bg-2);
+    border: 1px solid #233039;
+    border-radius: 12px;
+    overflow:hidden;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+  }
+  .menu-panel button{
+    display:flex;
+    width:100%;
+    align-items:center;
+    gap:10px;
+    background:none;
+    border:none;
+    border-bottom: 1px solid #202a30;
+    color: var(--cream);
+    font-family:'Space Mono', monospace;
+    font-size: 0.78rem;
+    padding: 13px 16px;
+    text-align:left;
+    cursor:pointer;
+  }
+  .menu-panel button:last-child{ border-bottom:none; }
+  .menu-panel button:hover{ background:#1f2930; color: var(--amber); }
+  .menu-panel button .dot{
+    width:5px; height:5px; border-radius:50%;
+    background: var(--amber);
+  }
+
+  /* Screens */
+  .app{
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .screen{
+    display:none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: clamp(4px, calc(var(--vh, 1vh) * 1), 10px) 16px clamp(8px, calc(var(--vh, 1vh) * 2), 18px);
+  }
+  .screen.active{ display:block; }
+
+  /* Fundo de madeira envernizada, clássica de toca-discos, só na tela de reprodução */
+  #screen-player{
+    background:
+      radial-gradient(ellipse at 28% 12%, rgba(255,225,180,0.30), rgba(255,225,180,0) 42%),
+      repeating-linear-gradient(97deg,
+        rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1.5px,
+        rgba(0,0,0,0) 1.5px, rgba(0,0,0,0) 5px,
+        rgba(255,255,255,0.03) 5px, rgba(255,255,255,0.03) 6px,
+        rgba(0,0,0,0) 6px, rgba(0,0,0,0) 9px),
+      repeating-linear-gradient(97deg,
+        rgba(0,0,0,0.06) 0px, rgba(0,0,0,0.06) 30px,
+        rgba(0,0,0,0) 30px, rgba(0,0,0,0) 70px),
+      linear-gradient(150deg, #a9713f 0%, #8a5630 28%, #6b3f20 55%, #4d2c15 80%, #3a2010 100%);
+    box-shadow: inset 0 0 70px rgba(0,0,0,0.5), inset 0 0 2px rgba(255,255,255,0.08);
+  }
+
+  #screen-albuns{ padding-left:10px; padding-right:10px; }
+
+  /* Cabeçalho padrão de todas as telas: Voltar sempre em cima,
+     título centralizado embaixo — organizado e consistente. */
+  .screen-header{
+    position:relative;
+    display:flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding-top: 2px;
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+  .screen-header .header-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    width:100%;
+  }
+  .screen-header .header-actions{
+    display:flex;
+    gap:8px;
+    flex-shrink:0;
+  }
+  .icon-btn{
+    width:38px; height:38px;
+    border-radius:50%;
+    border:1px solid var(--teal);
+    background: var(--bg-2);
+    color: var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    font-size:0.85rem;
+    transition:0.2s;
+    flex-shrink:0;
+  }
+  .icon-btn:hover{ border-color: var(--amber); color: var(--amber); }
+  .screen-header h2{
+    font-family:'Playfair Display', serif;
+    font-size: 1.1rem;
+    margin:0;
+    color: var(--amber);
+    text-align:center;
+    line-height:1.3;
+    padding: 0 12px;
+  }
+
+  /* Tela de detalhe (álbum/artista/playlist): título é dinâmico e pode ser
+     longo, por isso usa uma fonte um pouco maior. */
+  #screen-category-detail .screen-header h2,
+  #screen-playlist-detail .screen-header h2{
+    font-size: 1.25rem;
+  }
+
+  /* Player screen */
+  .player-body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+
+  /* TV mostrando a arte do álbum — mesma largura do toca-discos */
+  .tv-unit{
+    width: 100%;
+    max-width: var(--deck-w);
+    margin: clamp(2px, calc(var(--vh, 1vh) * 0.5), 4px) 0 clamp(4px, calc(var(--vh, 1vh) * 1.2), 11px);
+  }
+
+  /* Créditos do desenvolvedor */
+  .dev-credit{
+    width:100%;
+    max-width: var(--deck-w);
+    text-align:center;
+    line-height: 1;
+    margin-top: clamp(1px, calc(var(--vh, 1vh) * 0.3), 3px);
+    font-size: 0.62rem;
+    letter-spacing: 0.03em;
+    color: var(--teal);
+    opacity: 0.75;
+  }
+  .dev-credit a{
+    color: var(--amber);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .dev-credit a:active{ opacity: 0.8; }
+  .tv-frame{
+    position: relative;
+    background: linear-gradient(160deg, #232323, #050505);
+    border-radius: 18px;
+    padding: clamp(8px, calc(var(--vh, 1vh) * 2), 14px);
+    box-shadow: 0 14px 30px rgba(0,0,0,0.55), inset 0 0 0 2px #000;
+  }
+  .tv-screen{
+    position: relative;
+    width: 100%;
+    padding-top: 100%;
+    border-radius: 8px;
+    background: #050708;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden;
+    box-shadow: inset 0 0 22px rgba(0,0,0,0.85);
+  }
+  .tv-screen .tv-text{
+    position: absolute; inset: 0;
+    display:flex; align-items:center; justify-content:center;
+    text-align:center;
+    padding: 12px;
+    font-family:'Playfair Display', serif;
+    font-size: 0.85rem;
+    color: var(--teal);
+  }
+  .tv-screen.has-art .tv-text{ display:none; }
+  .tv-video{
+    position:absolute; inset:0;
+    display:none;
+    background:#000;
+    overflow:hidden;
+  }
+  .tv-video iframe{
+    position:absolute;
+    top:50%; left:50%;
+    width: 178%;
+    height: 100%;
+    transform: translate(-50%, -50%);
+    border:0;
+    pointer-events:none;
+  }
+  .tv-screen.has-video .tv-text{ display:none; }
+  .tv-screen.has-video .tv-video{ display:block; }
+  .yt-icon-btn{
+    color: #ff4d4d;
+    font-size: 0.95rem;
+  }
+  .yt-icon-btn.linked{ border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber) inset; }
+
+  .radio-btn{ color: var(--cream); }
+  .radio-btn.active{
+    border-color: var(--red);
+    color: var(--red);
+    box-shadow: 0 0 0 1px var(--red) inset;
+    animation: radioPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes radioPulse{
+    0%, 100%{ box-shadow: 0 0 0 1px var(--red) inset, 0 0 0 0 rgba(193,68,61,0.55); }
+    50%{ box-shadow: 0 0 0 1px var(--red) inset, 0 0 0 5px rgba(193,68,61,0); }
+  }
+  .tv-screen.glitching{ animation: tvGlitch 0.1s linear infinite; }
+  @keyframes tvGlitch{
+    0%,100%{ filter:none; transform:translateX(0); }
+    20%{ filter: contrast(1.4) saturate(1.3); transform:translateX(-3px); }
+    40%{ filter: contrast(0.75); transform:translateX(3px); }
+    60%{ filter: contrast(1.25) hue-rotate(8deg); transform:translateX(-2px); }
+    80%{ filter: brightness(1.2); transform:translateX(2px); }
+  }
+  .tv-glass{
+    position:absolute; inset:14px;
+    border-radius:8px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 45%);
+    pointer-events:none;
+  }
+  .tv-knobs{
+    display:flex; justify-content:center; gap:10px;
+    margin-top: clamp(4px, calc(var(--vh, 1vh) * 1), 10px);
+  }
+  .tv-knobs span{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--teal);
+    box-shadow: inset 0 0 0 2px #0c0f10;
+  }
+
+  /* Toca-discos duplo */
+  .turntable{
+    width:100%;
+    max-width: var(--deck-w);
+    background: var(--bg-2);
+    border-radius: 16px;
+    padding: clamp(8px, calc(var(--vh, 1vh) * 2), 18px) 14px clamp(2px, calc(var(--vh, 1vh) * 0.6), 6px);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.45);
+    display:flex; flex-direction:column; align-items:center;
+    position: relative;
+  }
+
+  /* Luzinha indicadora, perto do disco esquerdo: acende piscando enquanto toca */
+  .power-led{
+    position:absolute;
+    top: 9px;
+    left: 14px;
+    width:8px; height:8px;
+    border-radius:50%;
+    background: #3a0d0d;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);
+    transition: background 0.2s ease;
+  }
+  .power-led.on{
+    background: #ff4d4d;
+    box-shadow: 0 0 5px 2px rgba(255,77,77,0.7);
+    animation: powerLedBlink 1s ease-in-out infinite;
+  }
+  @keyframes powerLedBlink{
+    0%, 100%{ opacity: 1; }
+    50%{ opacity: 0.25; }
+  }
+
+  /* Botão de repetir: agora fica na linha de volume, entre os botões - e + */
+  .repeat-btn{
+    position:relative;
+    width:26px; height:26px;
+    border-radius:50%;
+    border: 1px solid var(--teal);
+    background: var(--bg-2);
+    color: var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    z-index: 1;
+    transition: 0.2s;
+    padding:0;
+    flex-shrink:0;
+  }
+  @media (hover: hover) and (pointer: fine){
+    .repeat-btn:hover{ border-color: var(--amber); }
+  }
+  .repeat-btn.repeat-all, .repeat-btn.repeat-one{
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+  .repeat-btn .repeat-one-badge{
+    position:absolute;
+    bottom:-4px; right:-4px;
+    width:12px; height:12px;
+    border-radius:50%;
+    background: var(--amber);
+    color:#181008;
+    font-size:8px;
+    font-weight:700;
+    display:none;
+    align-items:center; justify-content:center;
+    line-height:1;
+  }
+  .repeat-btn.repeat-one .repeat-one-badge{ display:flex; }
+  .deck-row{
+    display:flex;
+    justify-content:center;
+    gap: 20px;
+    width:100%;
+    margin-bottom: clamp(6px, calc(var(--vh, 1vh) * 1.6), 14px);
+  }
+  .deck-unit{
+    position:relative;
+    width: 42%;
+    max-width:140px;
+    aspect-ratio: 1 / 1;
+  }
+
+  /* Botão equalizador: fica entre os dois discos, no centro do toca-discos */
+  .eq-btn{
+    align-self:center;
+    flex-shrink:0;
+    width: clamp(28px, calc(var(--btn-size) * 0.8), 38px);
+    height: clamp(28px, calc(var(--btn-size) * 0.8), 38px);
+    border-radius:50%;
+    border: 2px solid var(--teal);
+    background: radial-gradient(circle at 32% 28%, #24313688, var(--bg-2) 70%);
+    color: var(--amber);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    z-index: 3;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.45), inset 0 0 0 2px rgba(0,0,0,0.3);
+    transition: 0.2s;
+    padding:0;
+  }
+  .eq-btn:hover{ border-color: var(--amber); }
+  .eq-btn.active{
+    border-color: var(--amber);
+    background: radial-gradient(circle at 32% 28%, var(--amber), #96691f 75%);
+    color:#1a1206;
+  }
+  .eq-btn svg{ pointer-events:none; }
+
+  /* Painel do equalizador */
+  .eq-overlay{
+    position: fixed; inset:0;
+    background: rgba(6,9,10,0.6);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index: 50;
+    padding: 20px;
+  }
+  .eq-overlay.open{ display:flex; }
+
+  .eq-panel{
+    width:100%;
+    max-width: 320px;
+    background: var(--bg-2);
+    border: 1px solid #233039;
+    border-radius: 16px;
+    padding: 18px 20px 20px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+  }
+  .eq-panel-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom: 16px;
+  }
+  .eq-panel-header h3{
+    margin:0;
+    font-family:'Space Mono', monospace;
+    font-size:0.85rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color: var(--amber);
+  }
+  .eq-close{
+    background:none;
+    border:1px solid var(--teal);
+    color: var(--cream);
+    width:28px; height:28px;
+    border-radius:50%;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.9rem;
+    line-height:1;
+  }
+  .eq-close:hover{ border-color: var(--amber); color: var(--amber); }
+
+  .eq-bands{
+    display:flex;
+    flex-direction:column;
+    gap: 16px;
+    padding: 4px 2px 2px;
+  }
+  .eq-band{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .eq-band .eq-label{
+    width: 50px;
+    flex-shrink:0;
+    font-size:0.65rem;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color: var(--cream);
+    opacity:0.85;
+  }
+  .eq-band input[type="range"]{
+    flex:1;
+    height:3px;
+    background: var(--teal);
+  }
+  .eq-band .eq-val{
+    width: 40px;
+    flex-shrink:0;
+    text-align:right;
+    font-size:0.62rem;
+    color: var(--cream);
+    opacity:0.7;
+  }
+
+  .eq-presets{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top:18px;
+    justify-content:center;
+  }
+  .eq-preset-btn{
+    background:none;
+    border:1px solid var(--teal);
+    color: var(--cream);
+    font-family:'Space Mono', monospace;
+    font-size:0.66rem;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    padding:6px 11px;
+    border-radius:14px;
+    cursor:pointer;
+  }
+  .eq-preset-btn:hover, .eq-preset-btn.selected{
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  .sleep-status{
+    text-align:center;
+    font-size:0.78rem;
+    color: var(--amber);
+    margin-bottom: 4px;
+    min-height: 1.3em;
+  }
+  .sleep-cancel-btn{ margin-top:14px; width:100%; }
+
+  /* Disco de vinil realista: sulcos, brilho e label central */
+  .platter{
+    position:absolute; inset:0;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 32% 26%, rgba(255,255,255,0.10), rgba(255,255,255,0) 32%),
+      repeating-radial-gradient(circle at center,
+        #0a0c0d 0px, #0a0c0d 2px,
+        #171b1d 3px, #171b1d 4px);
+    box-shadow:
+      0 12px 28px rgba(0,0,0,0.55),
+      inset 0 0 0 2px #000,
+      inset 0 0 0 4px #21262a,
+      inset 0 0 0 6px rgba(255,255,255,0.05);
+    animation: spin 6s linear infinite;
+    animation-play-state: paused;
+  }
+  .platter::before{
+    content:'';
+    position:absolute; top:50%; left:50%;
+    width:46%; height:46%;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    background: radial-gradient(circle at 32% 28%, #ffffff, #f1f1f1 55%, #cfcfcf 90%);
+    box-shadow: inset 0 0 0 2px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.45);
+  }
+  .platter-label{
+    position:absolute; top:50%; left:50%;
+    width:40%; height:40%;
+    transform:translate(-50%,-50%);
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    z-index:1;
+    pointer-events:none;
+    overflow:hidden;
+    box-sizing:border-box;
+    padding: 2px;
+  }
+  /* Nome "10uilton" acompanhando a curva do label, igual no disco de verdade */
+  .label-svg{
+    width:100%; height:100%;
+    overflow:visible;
+  }
+  .label-svg path{ fill:none; }
+  .label-text{
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size: 13.5px;
+    letter-spacing: 0.5px;
+    fill:#22262a;
+  }
+  .platter.playing{ animation-play-state: running; }
+  .platter.scratching{ animation: judder 0.12s linear infinite; }
+
+  @keyframes judder{
+    0%,100%{ transform: rotate(0deg); }
+    25%{ transform: rotate(-3deg); }
+    50%{ transform: rotate(2deg); }
+    75%{ transform: rotate(-2deg); }
+  }
+
+  .thumb{
+    width:26px; height:26px;
+    border-radius:5px;
+    background: var(--teal);
+    object-fit:cover;
+    flex-shrink:0;
+  }
+  .spindle{
+    position:absolute; top:50%; left:50%;
+    width:7px; height:7px; border-radius:50%;
+    background:#0c0f10;
+    box-shadow: 0 0 0 1px #2a2f32;
+    transform:translate(-50%,-50%);
+    z-index:2;
+  }
+
+  /* Agulha/tonearm realista: base giratória, braço metálico, cabeçote e stylus */
+  .tonearm-base{
+    position:absolute;
+    top:-8%; right:0%;
+    width:16%; height:16%;
+    border-radius:50%;
+    background: radial-gradient(circle at 32% 28%, #ddd8cc, #86806f 70%);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 0 0 2px rgba(0,0,0,0.25);
+    z-index:6;
+  }
+  .tonearm{
+    position:absolute;
+    top:-3%; right:8%;
+    width: 7px; height: 48%;
+    transform-origin: top center;
+    transform: rotate(-30deg);
+    transition: transform 0.5s ease;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,0.4));
+    z-index:5;
+  }
+  .tonearm.down{ transform: rotate(-6deg); }
+  .tonearm.skipping{ animation: needleJump 0.09s linear infinite; }
+  @keyframes needleJump{
+    0%,100%{ transform: rotate(-6deg); }
+    50%{ transform: rotate(-2deg); }
+  }
+  .tonearm::after{
+    content:'';
+    position:absolute; top:0; left:50%;
+    width:2.5px; height:100%;
+    background: linear-gradient(90deg, #d8d3c8, #706b5f 45%, #d8d3c8);
+    transform: translateX(-50%);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .tonearm::before{
+    content:'';
+    position:absolute; bottom:-10%; left:50%;
+    width:16px; height:9px;
+    background: linear-gradient(160deg, #303030, #0a0a0a);
+    border-radius: 3px 3px 6px 6px;
+    transform: translateX(-50%);
+    box-shadow:
+      0 2px 5px rgba(0,0,0,0.5),
+      0 9px 0 -7px #cfc9bc;
+  }
+
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  /* Painel LED: nome da música, álbum e artista */
+  .led-panel{
+    width:100%;
+    background:#04100a;
+    border-radius:10px;
+    padding: clamp(6px, calc(var(--vh, 1vh) * 1.4), 10px) 14px;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.6), 0 0 0 1px #06140d;
+    margin-bottom: clamp(6px, calc(var(--vh, 1vh) * 1.6), 12px);
+  }
+  .led-title{
+    font-family:'Space Mono', monospace;
+    font-size: 0.85rem;
+    font-weight:700;
+    color: #ffffff;
+    text-shadow: 0 0 6px rgba(255,255,255,0.55);
+    letter-spacing: 0.02em;
+    white-space:nowrap; overflow:hidden;
+    position: relative;
+  }
+  .led-sub{
+    font-family:'Space Mono', monospace;
+    font-size: 0.65rem;
+    font-weight:700;
+    color: #ffffff;
+    text-shadow: 0 0 4px rgba(255,255,255,0.4);
+    text-transform:uppercase;
+    letter-spacing: 0.06em;
+    white-space:nowrap; overflow:hidden;
+    margin-top:4px;
+    position: relative;
+    opacity: 0.85;
+  }
+  .led-track{
+    display:inline-flex;
+    white-space:nowrap;
+  }
+  .led-inner{
+    padding-right: 48px;
+  }
+  .led-title.marquee .led-track,
+  .led-sub.marquee .led-track{
+    animation: ledMarquee var(--marquee-duration, 10s) linear infinite;
+  }
+  @keyframes ledMarquee{
+    from{ transform: translateX(0); }
+    to{ transform: translateX(-50%); }
+  }
+
+  .seek-row{
+    width:100%;
+    max-width:340px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:0.68rem;
+    color: var(--cream);
+    opacity:0.8;
+    margin-bottom: clamp(6px, calc(var(--vh, 1vh) * 1.6), 14px);
+  }
+  input[type=range]{
+    -webkit-appearance:none;
+    flex:1;
+    height:3px;
+    background: var(--teal);
+    border-radius:2px;
+    outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:12px; height:12px; border-radius:50%;
+    background: var(--amber);
+    cursor:pointer;
+  }
+
+  .controls-5{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 8px;
+    width:100%;
+    max-width: 340px;
+    margin-bottom: clamp(6px, calc(var(--vh, 1vh) * 1.6), 14px);
+  }
+  .ctrl-btn{
+    position:relative;
+    background: linear-gradient(160deg, #263640, #121a1f);
+    border: 1px solid #0a1013;
+    color: var(--cream);
+    width: var(--btn-size, 46px); height: var(--btn-size, 46px);
+    border-radius:50%;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 1rem;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    flex-shrink:0;
+    overflow:hidden;
+    box-shadow:
+      0 4px 0 #060a0c,
+      0 7px 12px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.10);
+  }
+  .ctrl-btn::before{
+    content:'';
+    position:absolute;
+    top:3px; left:9px; right:9px;
+    height:42%;
+    border-radius: 50% 50% 60% 60% / 80% 80% 100% 100%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0));
+    pointer-events:none;
+  }
+  .ctrl-btn svg{ position:relative; z-index:1; }
+  @media (hover: hover) and (pointer: fine){
+    .ctrl-btn:hover{ color: var(--amber); }
+  }
+  .ctrl-btn.active{ color: var(--amber); }
+  .ctrl-btn:active{
+    transform: translateY(3px);
+    box-shadow:
+      0 1px 0 #060a0c,
+      0 2px 5px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .ctrl-btn.play-btn{
+    width: var(--play-size, 64px); height: var(--play-size, 64px);
+    background: linear-gradient(160deg, #f4bd6c, var(--amber));
+    border-color: #a66f22;
+    color:#181008;
+    font-size: 1.3rem;
+    box-shadow:
+      0 5px 0 #a66f22,
+      0 9px 16px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .ctrl-btn.play-btn:hover{ color:#181008; }
+  .ctrl-btn.play-btn:active{
+    transform: translateY(4px);
+    box-shadow:
+      0 1px 0 #a66f22,
+      0 3px 6px rgba(0,0,0,0.5),
+      inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+
+  .volume-row{
+    display:flex; align-items:center; justify-content:center;
+    gap:14px;
+    width:100%;
+    max-width:240px;
+    margin: 0 auto 10px;
+  }
+  .vol-btn{
+    width:26px; height:26px;
+    border-radius:50%;
+    border: 1px solid var(--teal);
+    background: var(--bg-2);
+    color: var(--cream);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    font-size: 1rem;
+    line-height:1;
+    padding:0;
+    transition: 0.2s;
+    flex-shrink:0;
+  }
+  @media (hover: hover) and (pointer: fine){
+    .vol-btn:hover{ border-color: var(--amber); color: var(--amber); }
+  }
+  .vol-btn:active{ transform: scale(0.9); border-color: var(--amber); }
+
+  /* Library screens */
+  .sleeve{
+    background: var(--bg-2);
+    border-radius: 10px;
+    padding: 6px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  .sleeve-header{
+    display:flex; justify-content:space-between; align-items:center;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid #232d33;
+  }
+  .sleeve-header .sleeve-actions{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+  }
+  .sleeve-header span{
+    font-size:0.68rem;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color: var(--teal);
+  }
+  .add-btn{
+    background:none;
+    border:1px solid var(--amber);
+    color: var(--amber);
+    font-family:'Space Mono',monospace;
+    font-size:0.68rem;
+    padding:6px 12px;
+    border-radius:20px;
+    cursor:pointer;
+  }
+  .add-btn:hover{ background: var(--amber); color:#181008; }
+
+  /* Campo de busca na tela Músicas */
+  .search-row{ padding: 2px 0 10px; }
+  .search-input{
+    width:100%;
+    background:#101619;
+    border:1px solid #233039;
+    border-radius:20px;
+    color: var(--cream);
+    font-family:'Space Mono', monospace;
+    font-size:0.78rem;
+    padding:9px 14px;
+    outline:none;
+  }
+  .search-input:focus{ border-color: var(--amber); }
+  .search-input::placeholder{ color: var(--teal); }
+
+  ul.track-list{
+    list-style:none;
+    margin:0; padding: 4px 0;
+    max-height: calc(var(--vh, 1vh) * 50);
+    overflow-y:auto;
+  }
+  ul.track-list li.track-item{
+    display:flex; align-items:center; gap:10px;
+    padding: 10px 12px;
+    font-size:0.78rem;
+    cursor:pointer;
+    border-radius:6px;
+  }
+  ul.track-list li.track-item:hover{ background:#1f2930; }
+  ul.track-list li.track-item.active{ background:#22303a; color: var(--amber); }
+  ul.track-list li.track-item .idx{ width:18px; color: var(--teal); font-size:0.7rem; }
+  ul.track-list li.track-item .name{
+    flex:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+
+  .group-header{
+    font-family:'Playfair Display', serif;
+    font-size: 0.85rem;
+    color: var(--amber);
+    padding: 14px 12px 4px;
+    border-top: 1px solid #202a30;
+  }
+  .group-header:first-child{ border-top:none; }
+  .group-count{
+    color: var(--teal);
+    font-family:'Space Mono', monospace;
+    font-size: 0.65rem;
+    margin-left: 6px;
+  }
+
+  .empty-state{
+    padding: 30px 16px;
+    text-align:center;
+    font-size:0.75rem;
+    color: var(--teal);
+    line-height:1.6;
+  }
+
+  /* Lista de categorias (Álbuns / Artistas): nome + quantidade */
+  li.category-item{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding: 15px 12px;
+    font-size:0.82rem;
+    cursor:pointer;
+    border-bottom: 1px solid #202a30;
+  }
+  li.category-item:last-child{ border-bottom:none; }
+  li.category-item:hover{ background:#1f2930; }
+  li.category-item .cat-name{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    color: var(--cream);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  li.category-item .cat-count{
+    color: var(--teal);
+    font-family:'Space Mono', monospace;
+    font-size: 0.7rem;
+    flex-shrink:0;
+    margin-left: 10px;
+  }
+  li.category-item:hover .cat-name{ color: var(--amber); }
+
+  /* Selo de posição no ranking das "Mais tocadas" */
+  .rank-badge{
+    flex-shrink:0;
+    margin-left: 10px;
+    font-family:'Space Mono', monospace;
+    font-weight:700;
+    font-size: 0.82rem;
+    color: var(--cream);
+  }
+
+  /* Grade de álbuns com capa em arte, no estilo de uma vitrine de discos */
+  ul.album-grid{
+    list-style:none;
+    margin:0; padding: 8px 34px 4px 4px;
+    max-height: calc(var(--vh, 1vh) * 66);
+    overflow-y:auto;
+    overflow-x:hidden;
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 26px;
+  }
+  li.album-card{
+    display:flex;
+    flex-direction:column;
+    cursor:pointer;
+    min-width: 0;
+  }
+  .album-cover{
+    position:relative;
+    width:100%;
+    aspect-ratio: 1 / 1;
+    overflow: visible;
+  }
+  .album-art{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    border-radius: 6px;
+    overflow:hidden;
+    background-size: cover;
+    background-position: center;
+    background-color: #1b262e;
+    box-shadow:
+      0 8px 18px rgba(0,0,0,0.5),
+      inset 0 0 0 1px rgba(255,255,255,0.08);
+    transition: transform 0.15s ease;
+  }
+  li.album-card:active .album-art{ transform: scale(0.97); }
+  /* Disco de vinil saindo por trás da capa, como numa foto de capa real */
+  .album-disc{
+    position:absolute;
+    top:50%; right:-18%;
+    transform: translateY(-50%);
+    width:70%;
+    aspect-ratio: 1 / 1;
+    border-radius:50%;
+    z-index:1;
+    background:
+      /* sulcos finos e densos, como as ranhuras reais do vinil */
+      repeating-radial-gradient(circle at 50% 50%,
+        rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 0.5px,
+        rgba(0,0,0,0.16) 0.5px, rgba(0,0,0,0.16) 1.4px),
+      /* reflexo suave de luz, fora de centro, como um verniz brilhante */
+      radial-gradient(circle at 36% 30%, rgba(255,255,255,0.14), rgba(255,255,255,0) 30%),
+      radial-gradient(circle at 64% 72%, rgba(0,0,0,0.4), rgba(0,0,0,0) 55%),
+      /* base bem escura do vinil */
+      radial-gradient(circle at 50% 50%, #1a1a1b 0%, #0e0e0f 62%, #030303 100%);
+    box-shadow:
+      -14px 0 24px rgba(0,0,0,0.5),
+      inset 0 0 0 1px rgba(255,255,255,0.05),
+      inset 0 0 16px rgba(0,0,0,0.65);
+  }
+  /* faixa de brilho diagonal passando pelo disco, como luz refletida no verniz */
+  .album-disc::before{
+    content:'';
+    position:absolute; inset:0;
+    border-radius:50%;
+    background: linear-gradient(112deg,
+      rgba(255,255,255,0) 32%,
+      rgba(255,255,255,0.09) 46%,
+      rgba(255,255,255,0) 58%);
+    pointer-events:none;
+  }
+  /* rótulo central do disco, com furo do eixo no meio */
+  .album-disc::after{
+    content:'';
+    position:absolute;
+    top:50%; left:50%;
+    width:33%; height:33%;
+    transform: translate(-50%,-50%);
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 50% 50%, #040404 0 5%, transparent 5.5%),
+      radial-gradient(circle at 36% 30%, rgba(255,255,255,0.3), rgba(255,255,255,0) 42%),
+      radial-gradient(circle at 50% 50%, #c1443d 0%, #8a2f2a 68%, #611f1b 100%);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.55),
+      inset 0 0 6px rgba(0,0,0,0.5);
+  }
+  .album-art.no-art{
+    display:flex; align-items:center; justify-content:center;
+    background:
+      radial-gradient(circle at 30% 25%, rgba(232,169,76,0.18), rgba(232,169,76,0) 55%),
+      linear-gradient(150deg, #22303a 0%, #182229 60%, #10161a 100%);
+  }
+  .album-art.no-art .note-icon{
+    font-size: 1.8rem;
+    color: var(--teal);
+    opacity:0.7;
+  }
+  .album-info{
+    padding: 8px 2px 0;
+  }
+  .album-name{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    font-size: 0.8rem;
+    color: var(--cream);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .album-meta{
+    color: var(--teal);
+    font-family:'Space Mono', monospace;
+    font-size: 0.65rem;
+    margin-top: 2px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  li.album-card:hover .album-name{ color: var(--amber); }
+
+  /* Overlay de carregamento: mostra progresso ao importar músicas/pastas */
+  .loading-overlay{
+    position: fixed; inset:0;
+    background: rgba(6,9,10,0.72);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index: 100;
+    padding: 0 24px;
+  }
+  .loading-overlay.open{ display:flex; }
+  .loading-box{
+    width:100%;
+    max-width: 300px;
+    background: var(--bg-2);
+    border: 1px solid #233039;
+    border-radius: 14px;
+    padding: 22px 20px;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+    text-align:center;
+  }
+  .loading-box .loading-title{
+    font-family:'Playfair Display', serif;
+    font-weight:600;
+    color: var(--cream);
+    font-size: 0.92rem;
+    margin-bottom: 14px;
+  }
+  .loading-track{
+    width:100%;
+    height: 8px;
+    border-radius: 6px;
+    background: #101619;
+    border: 1px solid #233039;
+    overflow:hidden;
+    margin-bottom: 10px;
+  }
+  .loading-fill{
+    height:100%;
+    width:0%;
+    background: linear-gradient(90deg, var(--teal), var(--amber));
+    transition: width 0.15s ease-out;
+  }
+  .loading-pct{
+    font-family:'Space Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--amber);
+    letter-spacing: 0.04em;
+  }
+
+  /* Modal genérico (criar playlist / confirmar exclusão) */
+  .modal-msg{
+    font-family:'Space Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--cream);
+    opacity: 0.85;
+    line-height: 1.5;
+    margin-bottom: 14px;
+  }
+  .prompt-input{
+    width:100%;
+    background: #101619;
+    border: 1px solid #233039;
+    border-radius: 8px;
+    color: var(--cream);
+    font-family:'Space Mono', monospace;
+    font-size: 0.85rem;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    outline: none;
+  }
+  .prompt-input:focus{ border-color: var(--amber); }
+  .prompt-actions{
+    display:flex;
+    gap: 10px;
+  }
+  .prompt-btn{
+    flex:1;
+    border-radius: 20px;
+    padding: 10px 14px;
+    font-family:'Space Mono', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor:pointer;
+    background: none;
+  }
+  .prompt-btn.cancel{
+    border: 1px solid var(--teal);
+    color: var(--cream);
+  }
+  .prompt-btn.cancel:hover{ border-color: var(--amber); color: var(--amber); }
+  .prompt-btn.confirm{
+    border: 1px solid var(--amber);
+    background: var(--amber);
+    color: #16201f;
+    font-weight:700;
+  }
+  .prompt-btn.confirm:hover{ opacity:0.9; }
+
+  /* Item da lista de "adicionar à playlist": mostra se já está incluída */
+  li.picker-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding: 12px;
+    border-bottom: 1px solid #202a30;
+    cursor:pointer;
+  }
+  li.picker-item:last-child{ border-bottom:none; }
+  li.picker-item:hover{ background:#1f2930; }
+  li.picker-item .name{
+    flex:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:0.82rem;
+  }
+  li.picker-item .picker-check{
+    flex-shrink:0;
+    width:22px; height:22px;
+    border-radius:50%;
+    border:1px solid var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    font-size:0.7rem;
+    color: transparent;
+  }
+  li.picker-item.added .picker-check{
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #16201f;
+  }
+  li.picker-item.added .name{ color: var(--amber); }
+
+  /* Botão de remover faixa de dentro de uma playlist */
+  li.track-item .remove-from-playlist{
+    flex-shrink:0;
+    background:none;
+    border:none;
+    color: var(--teal);
+    font-size: 1rem;
+    padding: 4px 6px;
+    cursor:pointer;
+  }
+  li.track-item .remove-from-playlist:hover{ color: var(--red); }
+
+  /* Botão de favoritar (coração), aparece em toda música na lista */
+  li.track-item .fav-btn{
+    flex-shrink:0;
+    background:none;
+    border:none;
+    color: var(--teal);
+    font-size: 1.05rem;
+    line-height:1;
+    padding: 4px 4px;
+    cursor:pointer;
+  }
+  li.track-item .fav-btn:hover{ color: var(--amber); }
+  li.track-item .fav-btn.active{ color: var(--red); }
+
+  /* Botão de vincular vídeo do YouTube, aparece em toda música na lista */
+  li.track-item .yt-btn{
+    flex-shrink:0;
+    background:none;
+    border:none;
+    color: var(--teal);
+    font-size: 0.95rem;
+    line-height:1;
+    padding: 4px 4px;
+    cursor:pointer;
+  }
+  @media (hover: hover) and (pointer: fine){
+    li.track-item .yt-btn:hover{ color: var(--amber); }
+  }
+  li.track-item .yt-btn.active{ color: var(--amber); }
+
+  audio{ display:none; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="topbar">
+    <h1 id="appTitle">10uilton <span>Player</span></h1>
+    <button class="menu-btn" id="menuBtn" title="Abrir menu">&#9776;</button>
+  </div>
+
+  <!-- PLAYER -->
+  <div class="screen active" id="screen-player">
+    <div class="player-body">
+
+      <!-- TV com a arte do álbum -->
+      <div class="tv-unit">
+        <div class="tv-frame">
+          <div class="tv-screen" id="tvScreen">
+            <span class="tv-text" id="tvText">Sem disco</span>
+            <div class="tv-video" id="tvVideo"><div id="ytPlayerMount"></div></div>
+          </div>
+          <div class="tv-glass"></div>
+        </div>
+        <div class="tv-knobs"><span></span><span></span></div>
+      </div>
+
+      <!-- Toca-discos duplo -->
+      <div class="turntable">
+        <span class="power-led" id="powerLed"></span>
+        <div class="deck-row">
+          <div class="deck-unit">
+            <div class="platter" id="platterL">
+              <div class="platter-label">
+                <svg class="label-svg" viewBox="0 0 100 100" aria-hidden="true">
+                  <path id="labelArcL" d="M 10,64 A 40,40 0 1 1 90,64" fill="none"></path>
+                  <text class="label-text"><textPath href="#labelArcL" startOffset="50%" text-anchor="middle">10uilton</textPath></text>
+                </svg>
+              </div>
+              <div class="spindle"></div>
+            </div>
+            <div class="tonearm-base"></div>
+            <div class="tonearm" id="tonearmL"></div>
+          </div>
+
+          <button id="eqBtn" class="eq-btn" title="Equalizador">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <line x1="5" y1="19" x2="5" y2="11"></line>
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <line x1="19" y1="19" x2="19" y2="14"></line>
+            </svg>
+          </button>
+
+          <div class="deck-unit">
+            <div class="platter" id="platterR">
+              <div class="platter-label">
+                <svg class="label-svg" viewBox="0 0 100 100" aria-hidden="true">
+                  <path id="labelArcR" d="M 10,64 A 40,40 0 1 1 90,64" fill="none"></path>
+                  <text class="label-text"><textPath href="#labelArcR" startOffset="50%" text-anchor="middle">10uilton</textPath></text>
+                </svg>
+              </div>
+              <div class="spindle"></div>
+            </div>
+            <div class="tonearm-base"></div>
+            <div class="tonearm" id="tonearmR"></div>
+          </div>
+        </div>
+
+        <div class="led-panel">
+          <div class="led-title" id="nowTitle"><div class="led-track"><span class="led-inner">Nenhuma música selecionada</span></div></div>
+          <div class="led-sub" id="nowSub"><div class="led-track"><span class="led-inner">selecione uma faixa no menu</span></div></div>
+        </div>
+
+        <div class="seek-row">
+          <span id="curTime">0:00</span>
+          <input type="range" id="seek" value="0" min="0" max="100" step="0.1">
+          <span id="durTime">0:00</span>
+        </div>
+
+        <div class="controls-5">
+          <button id="prevBtn" class="ctrl-btn" title="Voltar">⏮</button>
+          <button id="shuffleBtnPlayer" class="ctrl-btn" title="Aleatório">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 3 21 3 21 8"></polyline>
+              <line x1="4" y1="20" x2="21" y2="3"></line>
+              <polyline points="21 16 21 21 16 21"></polyline>
+              <line x1="15" y1="15" x2="21" y2="21"></line>
+              <line x1="4" y1="4" x2="9" y2="9"></line>
+            </svg>
+          </button>
+          <button id="playBtn" class="ctrl-btn play-btn" title="Play/Pause">▶</button>
+          <button id="scratchBtn" class="ctrl-btn" title="Scratch">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="6.5" cy="6.5" r="2.4" fill="currentColor" stroke="none"></circle>
+              <line x1="8" y1="8" x2="16.5" y2="16.5"></line>
+              <circle cx="17.5" cy="17.5" r="1.7" fill="currentColor" stroke="none"></circle>
+            </svg>
+          </button>
+          <button id="nextBtn" class="ctrl-btn" title="Pular">⏭</button>
+        </div>
+
+        <div class="volume-row">
+          <button id="volDownBtn" class="vol-btn" title="Diminuir volume">&#8722;</button>
+          <button id="repeatBtn" class="repeat-btn" title="Repetir: desativado">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 1 21 5 17 9"></polyline>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+              <polyline points="7 23 3 19 7 15"></polyline>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+            </svg>
+            <span class="repeat-one-badge">1</span>
+          </button>
+          <button id="volUpBtn" class="vol-btn" title="Aumentar volume">&#43;</button>
+          <button id="ytLinkBtn" class="vol-btn yt-icon-btn" title="Vincular vídeo do YouTube a esta música">
+            <svg viewBox="0 0 24 24" width="15" height="15">
+              <rect x="1" y="5" width="22" height="14" rx="4" fill="#FF0000"></rect>
+              <polygon points="10,8.5 16,12 10,15.5" fill="#fff"></polygon>
+            </svg>
+          </button>
+          <button id="radioBtn" class="vol-btn radio-btn" title="Rádio 10uilton ao vivo">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path>
+              <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path>
+              <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"></circle>
+              <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path>
+              <path d="M19.1 4.9c3.9 3.9 3.9 10.3 0 14.2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="dev-credit">Desenvolvido por <a href="https://10uilton.blogspot.com" target="_blank" rel="noopener">10uilton</a></div>
+
+    </div>
+  </div>
+
+  <!-- MUSICAS -->
+  <div class="screen" id="screen-musicas">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+        <div class="header-actions">
+          <button class="icon-btn" id="musicasPlayBtn" title="Tocar em sequência">&#9654;</button>
+          <button class="icon-btn" id="musicasShuffleBtn" title="Tocar aleatório">&#128256;</button>
+        </div>
+      </div>
+      <h2>Músicas</h2>
+    </div>
+    <div class="sleeve">
+      <div class="sleeve-header">
+        <span id="countLabel">0 faixas</span>
+        <div class="sleeve-actions">
+          <button class="add-btn" id="addBtn">+ Adicionar músicas</button>
+        </div>
+      </div>
+      <div class="search-row">
+        <input type="text" id="musicSearchInput" class="search-input" placeholder="Buscar por música, artista ou álbum...">
+      </div>
+      <ul class="track-list" id="trackList"></ul>
+    </div>
+  </div>
+
+  <!-- ARTISTAS -->
+  <div class="screen" id="screen-artistas">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Artistas</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="listArtistas"></ul>
+    </div>
+  </div>
+
+  <!-- ALBUNS -->
+  <div class="screen" id="screen-albuns">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Álbuns</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="album-grid" id="listAlbuns"></ul>
+    </div>
+  </div>
+
+  <!-- DETALHE DE CATEGORIA (álbum, artista ou gênero) -->
+  <div class="screen" id="screen-category-detail">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+        <div class="header-actions">
+          <button class="icon-btn" id="categoryPlayBtn" title="Tocar em sequência">&#9654;</button>
+          <button class="icon-btn" id="categoryShuffleBtn" title="Tocar aleatório">&#128256;</button>
+        </div>
+      </div>
+      <h2 id="categoryDetailTitle">Categoria</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="categoryDetailList"></ul>
+    </div>
+  </div>
+
+  <!-- GENEROS -->
+  <div class="screen" id="screen-generos">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Gêneros</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="listGeneros"></ul>
+    </div>
+  </div>
+
+  <!-- PLAYLISTS -->
+  <div class="screen" id="screen-playlists">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Playlists</h2>
+    </div>
+    <div class="sleeve">
+      <div class="sleeve-header">
+        <span id="countLabelPlaylists">0 playlists</span>
+        <button class="add-btn" id="addPlaylistBtn">+ Nova playlist</button>
+      </div>
+      <ul class="track-list" id="listPlaylists"></ul>
+    </div>
+  </div>
+
+  <!-- DETALHE DE UMA PLAYLIST -->
+  <div class="screen" id="screen-playlist-detail" data-back-to="screen-playlists">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back data-back-to="screen-playlists">&#8592; Voltar</button>
+        <div class="header-actions">
+          <button class="icon-btn" id="playlistPlayBtn" title="Tocar em sequência">&#9654;</button>
+          <button class="icon-btn" id="playlistShuffleBtn" title="Tocar aleatório">&#128256;</button>
+          <button class="icon-btn" id="playlistDeleteBtn" title="Excluir playlist">&#128465;</button>
+        </div>
+      </div>
+      <h2 id="playlistDetailTitle">Playlist</h2>
+    </div>
+    <div class="sleeve">
+      <div class="sleeve-header">
+        <span id="countLabelPlaylistDetail">0 faixas</span>
+        <button class="add-btn" id="addTracksToPlaylistBtn">+ Adicionar músicas</button>
+      </div>
+      <ul class="track-list" id="playlistDetailList"></ul>
+    </div>
+  </div>
+
+  <!-- ESCOLHER MUSICAS PARA ADICIONAR A UMA PLAYLIST -->
+  <div class="screen" id="screen-playlist-picker">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back data-back-to="screen-playlist-detail">&#8592; Voltar</button>
+      </div>
+      <h2>Adicionar à playlist</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="playlistPickerList"></ul>
+    </div>
+  </div>
+
+  <!-- MAIS TOCADAS -->
+  <div class="screen" id="screen-mais-tocadas">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Mais tocadas</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="listMaisTocadas"></ul>
+    </div>
+  </div>
+
+  <!-- FAVORITAS -->
+  <div class="screen" id="screen-favoritas">
+    <div class="screen-header">
+      <div class="header-top">
+        <button class="back-btn" data-back>&#8592; Voltar</button>
+      </div>
+      <h2>Favoritas</h2>
+    </div>
+    <div class="sleeve">
+      <ul class="track-list" id="listFavoritas"></ul>
+    </div>
+  </div>
+
+</div>
+
+<!-- MENU DROPDOWN -->
+<div class="menu-overlay" id="menuOverlay">
+  <div class="menu-panel">
+    <button data-screen="screen-musicas"><span class="dot"></span> Músicas</button>
+    <button data-screen="screen-artistas"><span class="dot"></span> Artistas</button>
+    <button data-screen="screen-albuns"><span class="dot"></span> Álbuns</button>
+    <button data-screen="screen-generos"><span class="dot"></span> Gêneros</button>
+    <button data-screen="screen-playlists"><span class="dot"></span> Playlists</button>
+    <button data-screen="screen-mais-tocadas"><span class="dot"></span> Mais tocadas</button>
+    <button data-screen="screen-favoritas"><span class="dot"></span> Favoritas</button>
+    <button id="sleepTimerMenuBtn"><span class="dot"></span> Timer para dormir</button>
+  </div>
+</div>
+
+<!-- EQUALIZADOR -->
+<div class="eq-overlay" id="eqOverlay">
+  <div class="eq-panel">
+    <div class="eq-panel-header">
+      <h3>Equalizador</h3>
+      <button class="eq-close" id="eqCloseBtn">✕</button>
+    </div>
+    <div class="eq-bands">
+      <div class="eq-band">
+        <span class="eq-label">Graves</span>
+        <input type="range" id="eqBass" min="-12" max="12" step="1" value="0">
+        <span class="eq-val" id="eqValBass">0dB</span>
+      </div>
+      <div class="eq-band">
+        <span class="eq-label">Médios</span>
+        <input type="range" id="eqMid" min="-12" max="12" step="1" value="0">
+        <span class="eq-val" id="eqValMid">0dB</span>
+      </div>
+      <div class="eq-band">
+        <span class="eq-label">Agudos</span>
+        <input type="range" id="eqTreble" min="-12" max="12" step="1" value="0">
+        <span class="eq-val" id="eqValTreble">0dB</span>
+      </div>
+    </div>
+    <div class="eq-presets">
+      <button class="eq-preset-btn" data-preset="flat">Neutro</button>
+      <button class="eq-preset-btn" data-preset="bass">Grave+</button>
+      <button class="eq-preset-btn" data-preset="vocal">Vocal</button>
+      <button class="eq-preset-btn" data-preset="treble">Agudo+</button>
+    </div>
+  </div>
+</div>
+
+<!-- TIMER PARA DORMIR -->
+<div class="eq-overlay" id="sleepOverlay">
+  <div class="eq-panel">
+    <div class="eq-panel-header">
+      <h3>Timer para dormir</h3>
+      <button class="eq-close" id="sleepCloseBtn">✕</button>
+    </div>
+    <div class="sleep-status" id="sleepStatus">Nenhum timer ativo.</div>
+    <div class="eq-presets">
+      <button class="eq-preset-btn" data-sleep="15">15 min</button>
+      <button class="eq-preset-btn" data-sleep="30">30 min</button>
+      <button class="eq-preset-btn" data-sleep="45">45 min</button>
+      <button class="eq-preset-btn" data-sleep="60">60 min</button>
+    </div>
+    <button class="eq-preset-btn sleep-cancel-btn" id="sleepCancelBtn">Cancelar timer</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept="audio/*" multiple style="display:none">
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-box">
+    <div class="loading-title" id="loadingTitle">Carregando músicas…</div>
+    <div class="loading-track"><div class="loading-fill" id="loadingFill"></div></div>
+    <div class="loading-pct" id="loadingPct">0%</div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="modalOverlay">
+  <div class="loading-box">
+    <div class="loading-title" id="modalTitle">Título</div>
+    <div class="modal-msg" id="modalMsg" style="display:none;"></div>
+    <input type="text" id="modalInput" class="prompt-input" placeholder="" maxlength="60" style="display:none;">
+    <div class="prompt-actions">
+      <button class="prompt-btn cancel" id="modalCancelBtn">Cancelar</button>
+      <button class="prompt-btn confirm" id="modalConfirmBtn">OK</button>
+    </div>
+  </div>
+</div>
+<audio id="audio"></audio>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+<script>
+const fileInput = document.getElementById('fileInput');
+const addBtn = document.getElementById('addBtn');
+const trackList = document.getElementById('trackList');
+const listArtistas = document.getElementById('listArtistas');
+const listGeneros = document.getElementById('listGeneros');
+const listAlbuns = document.getElementById('listAlbuns');
+const listPlaylists = document.getElementById('listPlaylists');
+const countLabelPlaylists = document.getElementById('countLabelPlaylists');
+const addPlaylistBtn = document.getElementById('addPlaylistBtn');
+const playlistDetailTitle = document.getElementById('playlistDetailTitle');
+const playlistDetailList = document.getElementById('playlistDetailList');
+const countLabelPlaylistDetail = document.getElementById('countLabelPlaylistDetail');
+const playlistPlayBtn = document.getElementById('playlistPlayBtn');
+const playlistShuffleBtn = document.getElementById('playlistShuffleBtn');
+const playlistDeleteBtn = document.getElementById('playlistDeleteBtn');
+const addTracksToPlaylistBtn = document.getElementById('addTracksToPlaylistBtn');
+const playlistPickerList = document.getElementById('playlistPickerList');
+const listMaisTocadas = document.getElementById('listMaisTocadas');
+const categoryDetailList = document.getElementById('categoryDetailList');
+const categoryDetailTitle = document.getElementById('categoryDetailTitle');
+const categoryPlayBtn = document.getElementById('categoryPlayBtn');
+const categoryShuffleBtn = document.getElementById('categoryShuffleBtn');
+const musicasPlayBtn = document.getElementById('musicasPlayBtn');
+const musicasShuffleBtn = document.getElementById('musicasShuffleBtn');
+const countLabel = document.getElementById('countLabel');
+const audio = document.getElementById('audio');
+const playBtn = document.getElementById('playBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const seek = document.getElementById('seek');
+const curTime = document.getElementById('curTime');
+const durTime = document.getElementById('durTime');
+const volDownBtn = document.getElementById('volDownBtn');
+const volUpBtn = document.getElementById('volUpBtn');
+const platterL = document.getElementById('platterL');
+const platterR = document.getElementById('platterR');
+const powerLed = document.getElementById('powerLed');
+const tonearmL = document.getElementById('tonearmL');
+const tonearmR = document.getElementById('tonearmR');
+const tvScreen = document.getElementById('tvScreen');
+const tvText = document.getElementById('tvText');
+const tvVideo = document.getElementById('tvVideo');
+const ytLinkBtn = document.getElementById('ytLinkBtn');
+const radioBtn = document.getElementById('radioBtn');
+const shuffleBtnPlayer = document.getElementById('shuffleBtnPlayer');
+const scratchBtn = document.getElementById('scratchBtn');
+const nowTitle = document.getElementById('nowTitle');
+const nowSub = document.getElementById('nowSub');
+const eqBtn = document.getElementById('eqBtn');
+const eqOverlay = document.getElementById('eqOverlay');
+const eqCloseBtn = document.getElementById('eqCloseBtn');
+const eqBass = document.getElementById('eqBass');
+const eqMid = document.getElementById('eqMid');
+const eqTreble = document.getElementById('eqTreble');
+const eqValBass = document.getElementById('eqValBass');
+const eqValMid = document.getElementById('eqValMid');
+const eqValTreble = document.getElementById('eqValTreble');
+const repeatBtn = document.getElementById('repeatBtn');
+const musicSearchInput = document.getElementById('musicSearchInput');
+const listFavoritas = document.getElementById('listFavoritas');
+const sleepTimerMenuBtn = document.getElementById('sleepTimerMenuBtn');
+const sleepOverlay = document.getElementById('sleepOverlay');
+const sleepCloseBtn = document.getElementById('sleepCloseBtn');
+const sleepStatus = document.getElementById('sleepStatus');
+const sleepCancelBtn = document.getElementById('sleepCancelBtn');
+
+// Escreve um texto no visor LED; se o texto for maior que o espaço
+// disponível, ativa uma rolagem contínua (efeito painel de LED antigo).
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function setLedText(el, text){
+  el.classList.remove('marquee');
+  el.innerHTML = `<div class="led-track"><span class="led-inner">${escapeHtml(text)}</span></div>`;
+  requestAnimationFrame(() => {
+    const track = el.querySelector('.led-track');
+    if (!track) return;
+    const singleWidth = track.scrollWidth;
+    if (singleWidth > el.clientWidth){
+      const speed = 42; // pixels por segundo, velocidade constante independente do tamanho do nome
+      const duration = Math.max(4, singleWidth / speed);
+      el.style.setProperty('--marquee-duration', duration.toFixed(2) + 's');
+      track.innerHTML = `<span class="led-inner">${escapeHtml(text)}</span><span class="led-inner">${escapeHtml(text)}</span>`;
+      el.classList.add('marquee');
+    }
+  });
+}
+
+const menuBtn = document.getElementById('menuBtn');
+
+// Pinta cada letra do título com uma cor de neon diferente, estilo grafite.
+(function paintGraffitiTitle(){
+  const palette = ['#ff2fc4', '#22e6ff', '#ffe93b', '#39ff6a', '#ff8a1e', '#b34bff'];
+  const title = document.getElementById('appTitle');
+  if (!title) return;
+
+  const fullText = title.textContent;
+  title.innerHTML = '';
+
+  let colorIndex = 0;
+  for (const ch of fullText){
+    if (ch === ' '){
+      title.appendChild(document.createTextNode(' '));
+      continue;
+    }
+    const span = document.createElement('span');
+    span.className = 'gl';
+    span.style.color = palette[colorIndex % palette.length];
+    span.textContent = ch;
+    colorIndex++;
+    title.appendChild(span);
+  }
+})();
+const menuOverlay = document.getElementById('menuOverlay');
+
+let tracks = [];
+let currentIndex = -1;
+let lastLoadedWasYt = null; // se a última fonte carregada pro índice atual era vídeo (true) ou mp3 (false)
+let isSeeking = false;
+let currentCategoryFilter = { field: null, value: null };
+let playQueue = null;   // lista de índices quando tocando um álbum/artista/gênero específico
+let queuePos = -1;      // posição atual dentro da playQueue
+
+/* ---------- Armazenamento local (IndexedDB) ----------
+   Guarda o arquivo de áudio (Blob) + metadados no próprio aparelho,
+   para que a biblioteca continue existindo depois de fechar/reabrir o app. */
+let dbPromise = null;
+function openMusicDB(){
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open('musicaPlay10DB', 2);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('tracks')){
+        db.createObjectStore('tracks', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('playlists')){
+        db.createObjectStore('playlists', { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+async function dbSaveTrack(record){
+  try {
+    const db = await openMusicDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction('tracks', 'readwrite');
+      tx.objectStore('tracks').put(record);
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  } catch (e){
+    console.warn('Não foi possível salvar a música localmente:', e);
+  }
+}
+
+// Atualiza só alguns campos da música salva (ex.: contagem de reprodução),
+// sem precisar do arquivo de áudio original — preserva o Blob já salvo.
+async function dbUpdateTrackFields(id, fields){
+  try {
+    const db = await openMusicDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction('tracks', 'readwrite');
+      const store = tx.objectStore('tracks');
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const rec = getReq.result;
+        if (rec){
+          Object.assign(rec, fields);
+          store.put(rec);
+        }
+        resolve();
+      };
+      getReq.onerror = () => resolve();
+    });
+  } catch (e){
+    // silencioso: contagem de reprodução não é crítica
+  }
+}
+
+async function dbGetAllTracks(){
+  try {
+    const db = await openMusicDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('tracks', 'readonly');
+      const req = tx.objectStore('tracks').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch (e){
+    return [];
+  }
+}
+
+function trackToDBRecord(track, file){
+  return {
+    id: track.id,
+    blob: file || null,
+    name: track.name,
+    rawName: track.rawName,
+    artist: track.artist,
+    album: track.album,
+    genre: track.genre,
+    folder: track.folder,
+    folderPath: track.folderPath || (track.folder ? [track.folder] : ['Sem pasta']),
+    playCount: track.playCount || 0,
+    favorite: track.favorite || false,
+    art: track.art,
+    youtubeId: track.youtubeId || null,
+    youtubeTitle: track.youtubeTitle || null,
+    youtubeAuthor: track.youtubeAuthor || null,
+    preferYoutube: track.preferYoutube || false
+  };
+}
+
+/* ---------- Playlists (também salvas no IndexedDB) ---------- */
+async function dbSavePlaylist(playlist){
+  try {
+    const db = await openMusicDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction('playlists', 'readwrite');
+      tx.objectStore('playlists').put(playlist);
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  } catch (e){
+    console.warn('Não foi possível salvar a playlist localmente:', e);
+  }
+}
+
+async function dbDeletePlaylist(id){
+  try {
+    const db = await openMusicDB();
+    await new Promise((resolve) => {
+      const tx = db.transaction('playlists', 'readwrite');
+      tx.objectStore('playlists').delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror = resolve;
+    });
+  } catch (e){
+    console.warn('Não foi possível excluir a playlist:', e);
+  }
+}
+
+async function dbGetAllPlaylists(){
+  try {
+    const db = await openMusicDB();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('playlists', 'readonly');
+      const req = tx.objectStore('playlists').getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => resolve([]);
+    });
+  } catch (e){
+    return [];
+  }
+}
+
+let playlists = [];
+async function loadPersistedPlaylists(){
+  playlists = await dbGetAllPlaylists();
+  renderPlaylists();
+}
+
+// Carrega a biblioteca salva no aparelho assim que o app abre.
+const LAST_TRACK_KEY = 'musicaPlay10_lastTrackId';
+
+async function loadPersistedTracks(){
+  const records = await dbGetAllTracks();
+  records.forEach(rec => {
+    tracks.push({
+      id: rec.id,
+      name: rec.name,
+      rawName: rec.rawName,
+      artist: rec.artist,
+      album: rec.album,
+      genre: rec.genre,
+      folder: rec.folder || 'Sem pasta',
+      folderPath: rec.folderPath || (rec.folder ? [rec.folder] : ['Sem pasta']),
+      playCount: rec.playCount || 0,
+      favorite: rec.favorite || false,
+      art: rec.art || null,
+      tagsLoaded: true,
+      youtubeId: rec.youtubeId || null,
+      youtubeTitle: rec.youtubeTitle || null,
+      youtubeAuthor: rec.youtubeAuthor || null,
+      preferYoutube: rec.preferYoutube || false,
+      url: rec.blob ? URL.createObjectURL(rec.blob) : null
+    });
+  });
+  renderAll();
+
+  // Reabre a tela do player já mostrando a última música que estava carregada
+  // antes de fechar o app (sem tocar sozinha, só exibindo de novo).
+  if (tracks.length){
+    const lastId = localStorage.getItem(LAST_TRACK_KEY);
+    const idx = lastId ? tracks.findIndex(t => t.id === lastId) : -1;
+    loadTrack(idx !== -1 ? idx : 0, false);
+  }
+}
+
+/* ---------- Navegação entre telas ---------- */
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo({top:0, behavior:'instant'});
+}
+
+menuBtn.addEventListener('click', () => menuOverlay.classList.add('open'));
+menuOverlay.addEventListener('click', (e) => {
+  if (e.target === menuOverlay) menuOverlay.classList.remove('open');
+});
+
+menuOverlay.querySelectorAll('button[data-screen]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    showScreen(btn.dataset.screen);
+    menuOverlay.classList.remove('open');
+  });
+});
+
+document.querySelectorAll('[data-back]').forEach(btn => {
+  btn.addEventListener('click', () => showScreen(btn.dataset.backTo || 'screen-player'));
+});
+
+/* ---------- Biblioteca ---------- */
+
+addBtn.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  if (!files.length){ fileInput.value = ''; return; }
+
+  const pairs = [];
+  files.forEach(file => {
+    const parsed = parseName(file.name);
+    const track = {
+      id: 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: parsed.title,
+      rawName: cleanName(file.name),
+      artist: parsed.artist,
+      album: 'Álbum desconhecido',
+      genre: 'Gênero desconhecido',
+      folder: 'Sem pasta',
+      folderPath: ['Sem pasta'],
+      playCount: 0,
+      favorite: false,
+      art: null,
+      tagsLoaded: false,
+      url: URL.createObjectURL(file)
+    };
+    tracks.push(track);
+    dbSaveTrack(trackToDBRecord(track, file));
+    pairs.push({ file, track });
+  });
+  renderAll();
+  if (currentIndex === -1 && tracks.length) loadTrack(0);
+  fileInput.value = '';
+  loadTagsWithProgress(pairs, 'Carregando músicas…');
+});
+
+function cleanName(name){
+  return name.replace(/\.[^/.]+$/, '');
+}
+
+// Tenta separar "Artista - Título" a partir do nome do arquivo (usado só como reserva,
+// caso a música não tenha essas informações salvas nas tags ID3).
+function parseName(name){
+  const clean = cleanName(name);
+  const parts = clean.split(' - ');
+  if (parts.length >= 2){
+    return { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() };
+  }
+  return { artist: 'Artista desconhecido', title: clean };
+}
+
+/* ---------- Overlay de carregamento ---------- */
+const loadingOverlay = document.getElementById('loadingOverlay');
+const loadingTitle = document.getElementById('loadingTitle');
+const loadingFill = document.getElementById('loadingFill');
+const loadingPct = document.getElementById('loadingPct');
+
+function showLoadingOverlay(title, indeterminate){
+  loadingTitle.textContent = title;
+  loadingFill.style.width = '0%';
+  loadingPct.textContent = '0%';
+  loadingFill.parentElement.style.display = indeterminate ? 'none' : '';
+  loadingPct.style.display = indeterminate ? 'none' : '';
+  loadingOverlay.classList.add('open');
+}
+function updateLoadingProgress(done, total){
+  const pct = total ? Math.round((done / total) * 100) : 100;
+  loadingFill.style.width = pct + '%';
+  loadingPct.textContent = pct + '% (' + done + '/' + total + ')';
+}
+function hideLoadingOverlay(){
+  loadingOverlay.classList.remove('open');
+}
+
+/* ---------- Modal genérico (nova playlist / confirmar exclusão) ---------- */
+const modalOverlay = document.getElementById('modalOverlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalMsg = document.getElementById('modalMsg');
+const modalInput = document.getElementById('modalInput');
+const modalCancelBtn = document.getElementById('modalCancelBtn');
+const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+let modalResolve = null;
+let modalCancelValue = null;
+
+// options: { title, message, withInput, inputValue, inputPlaceholder, confirmLabel, cancelLabel, cancelValue, alertOnly }
+// Retorna: texto digitado (com input), true (confirmação), cancelValue (se veio da opção "cancelar" customizada) ou null (cancelou).
+function openModal(options){
+  return new Promise((resolve) => {
+    modalResolve = resolve;
+    modalCancelValue = options.cancelValue !== undefined ? options.cancelValue : null;
+    modalTitle.textContent = options.title || '';
+
+    if (options.message){
+      modalMsg.textContent = options.message;
+      modalMsg.style.display = 'block';
+    } else {
+      modalMsg.style.display = 'none';
+    }
+
+    if (options.withInput){
+      modalInput.style.display = 'block';
+      modalInput.value = options.inputValue || '';
+      modalInput.placeholder = options.inputPlaceholder || '';
+    } else {
+      modalInput.style.display = 'none';
+    }
+
+    modalCancelBtn.style.display = options.alertOnly ? 'none' : '';
+    modalCancelBtn.textContent = options.cancelLabel || 'Cancelar';
+    modalConfirmBtn.textContent = options.confirmLabel || 'OK';
+    modalOverlay.classList.add('open');
+    if (options.withInput) setTimeout(() => modalInput.focus(), 50);
+  });
+}
+function closeModal(result){
+  modalOverlay.classList.remove('open');
+  if (modalResolve) modalResolve(result);
+  modalResolve = null;
+}
+modalCancelBtn.addEventListener('click', () => closeModal(modalCancelValue));
+modalConfirmBtn.addEventListener('click', () => {
+  if (modalInput.style.display !== 'none'){
+    closeModal(modalInput.value.trim() || null);
+  } else {
+    closeModal(true);
+  }
+});
+modalInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter'){ e.preventDefault(); modalConfirmBtn.click(); }
+});
+
+// Processa a leitura de tags de várias músicas em paralelo (com limite),
+// em vez de uma por vez, e sem redesenhar a lista inteira a cada faixa —
+// isso é o que fazia o app travar ao importar muitos arquivos de uma vez.
+// A tela só é atualizada de tempos em tempos e ao final, então fica rápido
+// e ainda mostra a porcentagem de progresso em tempo real.
+function loadTagsWithProgress(pairs, title){
+  if (!pairs.length) return;
+  showLoadingOverlay(title);
+
+  const total = pairs.length;
+  let done = 0;
+  let idx = 0;
+  const CONCURRENCY = 6;
+  const RENDER_EVERY = 12;
+
+  function settle(){
+    done++;
+    updateLoadingProgress(done, total);
+    if (done >= total){
+      renderAll();
+      hideLoadingOverlay();
+      return;
+    }
+    if (done % RENDER_EVERY === 0) renderAll();
+    launchNext();
+  }
+
+  function launchNext(){
+    if (idx >= pairs.length) return;
+    const { file, track } = pairs[idx++];
+    readTags(file, track, settle);
+  }
+
+  for (let i = 0; i < CONCURRENCY && i < pairs.length; i++) launchNext();
+}
+
+// Igual à função acima, mas sem tela de carregamento nenhuma: usada ao
+// adicionar uma pasta, já que as músicas já ficam prontas pra tocar na hora
+// (o arquivo de áudio é utilizável assim que é escolhido). As tags ID3
+// (título, artista, capa) só chegam um instante depois, em segundo plano,
+// e a lista se atualiza sozinha conforme vão sendo lidas.
+function loadTagsQuietly(pairs){
+  if (!pairs.length) return;
+
+  const total = pairs.length;
+  let done = 0;
+  let idx = 0;
+  const CONCURRENCY = 6;
+  const RENDER_EVERY = 12;
+
+  function settle(){
+    done++;
+    if (done >= total){ renderAll(); return; }
+    if (done % RENDER_EVERY === 0) renderAll();
+    launchNext();
+  }
+
+  function launchNext(){
+    if (idx >= pairs.length) return;
+    const { file, track } = pairs[idx++];
+    readTags(file, track, settle);
+  }
+
+  for (let i = 0; i < CONCURRENCY && i < pairs.length; i++) launchNext();
+}
+
+// Lê as tags ID3/Vorbis/MP4 reais gravadas dentro do arquivo de áudio.
+function readTags(file, track, onDone){
+  if (typeof jsmediatags === 'undefined'){ if (onDone) onDone(); return; }
+
+  jsmediatags.read(file, {
+    onSuccess: (tag) => {
+      const info = tag.tags || {};
+      if (info.title && info.title.trim()) track.name = info.title.trim();
+      if (info.artist && info.artist.trim()) track.artist = info.artist.trim();
+      if (info.album && info.album.trim()) track.album = info.album.trim();
+      if (info.genre && info.genre.trim()) track.genre = info.genre.trim();
+
+      if (info.picture){
+        const { data, format } = info.picture;
+        let base64 = '';
+        for (let i = 0; i < data.length; i++) base64 += String.fromCharCode(data[i]);
+        track.art = `data:${format};base64,${window.btoa(base64)}`;
+      }
+
+      track.tagsLoaded = true;
+      dbSaveTrack(trackToDBRecord(track, file));
+      if (tracks[currentIndex] === track) loadTrack(currentIndex, false);
+      if (onDone) onDone();
+    },
+    onError: () => {
+      // Sem tags no arquivo: mantém os valores adivinhados pelo nome.
+      track.tagsLoaded = true;
+      if (onDone) onDone();
+    }
+  });
+}
+
+function renderAll(){
+  renderMusicas();
+  renderCategoryList(listArtistas, 'artist', 'artista', 'screen-artistas');
+  renderAlbumsGrid();
+  renderCategoryList(listGeneros, 'genre', 'gênero', 'screen-generos');
+  if (currentCategoryFilter.field) renderCategoryDetail();
+  renderMaisTocadas();
+  renderFavoritas();
+  if (currentPlaylistId) renderPlaylistDetail();
+}
+
+// Lista as músicas favoritadas, na ordem em que estão na biblioteca.
+function renderFavoritas(){
+  listFavoritas.innerHTML = '';
+  const favs = tracks.map((t, i) => ({ t, i })).filter(x => x.t.favorite);
+
+  if (!favs.length){
+    listFavoritas.innerHTML = `<li class="empty-state">
+      Nenhuma música favoritada ainda.<br>
+      Toque no coração ao lado de uma música para adicioná-la aqui.
+    </li>`;
+    return;
+  }
+
+  const indices = favs.map(x => x.i);
+  favs.forEach(({ t, i }) => listFavoritas.appendChild(makeTrackItem(t, i, indices)));
+}
+
+// Lista as músicas mais tocadas (no máximo 100), da mais para a menos ouvida.
+function renderMaisTocadas(){
+  listMaisTocadas.innerHTML = '';
+
+  const played = tracks
+    .map((t, i) => ({ t, i }))
+    .filter(x => (x.t.playCount || 0) > 0)
+    .sort((a, b) => (b.t.playCount || 0) - (a.t.playCount || 0))
+    .slice(0, 100);
+
+  if (!played.length){
+    listMaisTocadas.innerHTML = `<li class="empty-state">
+      Nenhuma música tocada ainda.<br>
+      As mais ouvidas aparecem aqui automaticamente conforme você for tocando as faixas.
+    </li>`;
+    return;
+  }
+
+  const indices = played.map(x => x.i);
+  played.forEach(({ t, i }, pos) => {
+    const li = makeTrackItem(t, i, indices);
+    const rankSpan = document.createElement('span');
+    rankSpan.className = 'cat-count rank-badge';
+    rankSpan.textContent = `${pos + 1}\u00ba`;
+    li.appendChild(rankSpan);
+    listMaisTocadas.appendChild(li);
+  });
+}
+
+/* ---------- Playlists ---------- */
+let currentPlaylistId = null;
+
+function findPlaylist(id){
+  return playlists.find(p => p.id === id);
+}
+
+// Converte os ids salvos na playlist para índices válidos em `tracks`,
+// na ordem em que foram adicionados, ignorando músicas que tenham sido apagadas.
+function resolvePlaylistIndices(pl){
+  const indices = [];
+  pl.trackIds.forEach(tid => {
+    const idx = tracks.findIndex(t => t.id === tid);
+    if (idx !== -1) indices.push(idx);
+  });
+  return indices;
+}
+
+function renderPlaylists(){
+  listPlaylists.innerHTML = '';
+  countLabelPlaylists.textContent = playlists.length + (playlists.length === 1 ? ' playlist' : ' playlists');
+
+  if (!playlists.length){
+    listPlaylists.innerHTML = `<li class="empty-state">
+      Nenhuma playlist criada ainda.<br>
+      Toque em "+ Nova playlist" para montar sua própria seleção de músicas.
+    </li>`;
+    return;
+  }
+
+  playlists.forEach(pl => {
+    const count = resolvePlaylistIndices(pl).length;
+    const li = document.createElement('li');
+    li.className = 'category-item';
+    li.innerHTML = `<span class="cat-name">${escapeHtml(pl.name)}</span><span class="cat-count">(${count})</span>`;
+    li.addEventListener('click', () => openPlaylistDetail(pl.id));
+    listPlaylists.appendChild(li);
+  });
+}
+
+function openPlaylistDetail(id){
+  currentPlaylistId = id;
+  renderPlaylistDetail();
+  showScreen('screen-playlist-detail');
+}
+
+function renderPlaylistDetail(){
+  const pl = findPlaylist(currentPlaylistId);
+  if (!pl) return;
+
+  playlistDetailTitle.textContent = pl.name;
+  const indices = resolvePlaylistIndices(pl);
+  countLabelPlaylistDetail.textContent = indices.length + (indices.length === 1 ? ' faixa' : ' faixas');
+
+  playlistDetailList.innerHTML = '';
+  if (!indices.length){
+    playlistDetailList.innerHTML = `<li class="empty-state">
+      Playlist vazia. Toque em "+ Adicionar músicas" para escolher as faixas.
+    </li>`;
+    return;
+  }
+
+  indices.forEach(i => {
+    const t = tracks[i];
+    const li = makeTrackItem(t, i, indices);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-from-playlist';
+    removeBtn.title = 'Remover da playlist';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      pl.trackIds = pl.trackIds.filter(tid => tid !== t.id);
+      dbSavePlaylist(pl);
+      renderPlaylistDetail();
+      renderPlaylists();
+    });
+    li.appendChild(removeBtn);
+    playlistDetailList.appendChild(li);
+  });
+}
+
+// Toca todas as faixas da playlist aberta no momento, em ordem ou embaralhadas.
+function startPlaylistPlayback(shuffle){
+  const pl = findPlaylist(currentPlaylistId);
+  if (!pl) return;
+  const indices = resolvePlaylistIndices(pl);
+  if (!indices.length) return;
+
+  playQueue = shuffle ? shuffleArray(indices.slice()) : indices.slice();
+  queuePos = 0;
+  loadTrack(playQueue[0], true);
+  showScreen('screen-player');
+}
+
+addPlaylistBtn.addEventListener('click', async () => {
+  const name = await openModal({
+    title: 'Nova playlist',
+    withInput: true,
+    inputPlaceholder: 'Nome da playlist',
+    confirmLabel: 'Criar'
+  });
+  if (!name) return;
+  const pl = { id: 'pl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, trackIds: [] };
+  playlists.push(pl);
+  dbSavePlaylist(pl);
+  renderPlaylists();
+});
+
+playlistPlayBtn.addEventListener('click', () => startPlaylistPlayback(false));
+playlistShuffleBtn.addEventListener('click', () => startPlaylistPlayback(true));
+
+playlistDeleteBtn.addEventListener('click', async () => {
+  const pl = findPlaylist(currentPlaylistId);
+  if (!pl) return;
+  const ok = await openModal({
+    title: 'Excluir playlist',
+    message: `Excluir "${pl.name}"? As músicas continuam na sua biblioteca — só a playlist é apagada.`,
+    confirmLabel: 'Excluir'
+  });
+  if (!ok) return;
+
+  playlists = playlists.filter(p => p.id !== pl.id);
+  dbDeletePlaylist(pl.id);
+  currentPlaylistId = null;
+  renderPlaylists();
+  showScreen('screen-playlists');
+});
+
+addTracksToPlaylistBtn.addEventListener('click', () => {
+  renderPlaylistPicker();
+  showScreen('screen-playlist-picker');
+});
+
+// Tela para escolher, entre todas as músicas da biblioteca, quais entram
+// na playlist aberta. Tocar num item adiciona/remove na hora — sem precisar
+// confirmar — e a lista da playlist já fica atualizada ao voltar.
+function renderPlaylistPicker(){
+  const pl = findPlaylist(currentPlaylistId);
+  playlistPickerList.innerHTML = '';
+  if (!pl) return;
+
+  if (!tracks.length){
+    playlistPickerList.innerHTML = `<li class="empty-state">Nenhuma música na biblioteca ainda.</li>`;
+    return;
+  }
+
+  tracks.forEach(t => {
+    const added = pl.trackIds.includes(t.id);
+    const li = document.createElement('li');
+    li.className = 'picker-item' + (added ? ' added' : '');
+    li.innerHTML = `<span class="picker-check">&#10003;</span><span class="name">${escapeHtml(t.name)}</span>`;
+    li.addEventListener('click', () => {
+      if (pl.trackIds.includes(t.id)){
+        pl.trackIds = pl.trackIds.filter(tid => tid !== t.id);
+      } else {
+        pl.trackIds.push(t.id);
+      }
+      dbSavePlaylist(pl);
+      li.classList.toggle('added');
+      renderPlaylists();
+      renderPlaylistDetail();
+    });
+    playlistPickerList.appendChild(li);
+  });
+}
+
+// Lista, em ordem alfabética, os nomes (artista ou álbum) com a quantidade de faixas.
+// Clicar em um item abre a tela de detalhe com as músicas daquele artista/álbum.
+function renderCategoryList(container, field, label, backTo, emptyMsg){
+  container.innerHTML = '';
+
+  if (!tracks.length){
+    container.innerHTML = emptyMsg ? `<li class="empty-state">${emptyMsg}</li>` : `<li class="empty-state">
+      Nenhuma música na biblioteca ainda.<br>
+      Adicione arquivos na tela "Músicas" para vê-los organizados por ${label}.
+    </li>`;
+    return;
+  }
+
+  const groups = groupBy(field);
+  const names = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'pt'));
+
+  const onlyUnknown = names.length === 1 && /desconhecid/i.test(names[0]);
+  if (onlyUnknown && !emptyMsg){
+    const note = document.createElement('li');
+    note.className = 'empty-state';
+    note.innerHTML = `Nenhum arquivo tinha ${label} salvo nas tags. Isso é normal para músicas
+      exportadas sem metadados — o app lê as tags reais automaticamente quando elas existem.`;
+    container.appendChild(note);
+  }
+
+  names.forEach(name => {
+    const indices = groups[name];
+    const li = document.createElement('li');
+    li.className = 'category-item';
+    li.innerHTML = `<span class="cat-name">${name}</span><span class="cat-count">(${indices.length})</span>`;
+    li.addEventListener('click', () => openCategoryDetail(field, name, backTo));
+    container.appendChild(li);
+  });
+}
+
+// Mostra os álbuns como uma grade de capas em arte (igual a uma vitrine de
+// discos), usando a imagem embutida nas tags do arquivo (ID3/Vorbis/MP4).
+// Quando o arquivo não tem capa nas tags, mostra um quadrado com ícone.
+function renderAlbumsGrid(){
+  listAlbuns.innerHTML = '';
+
+  if (!tracks.length){
+    listAlbuns.innerHTML = `<li class="empty-state">
+      Nenhuma música na biblioteca ainda.<br>
+      Adicione arquivos na tela "Músicas" para ver os álbuns aqui.
+    </li>`;
+    return;
+  }
+
+  const groups = groupBy('album');
+  const names = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'pt'));
+
+  const onlyUnknown = names.length === 1 && /desconhecid/i.test(names[0]);
+  if (onlyUnknown){
+    listAlbuns.innerHTML = `<li class="empty-state">
+      Nenhum arquivo tinha álbum salvo nas tags. Isso é normal para músicas
+      exportadas sem metadados — o app lê as tags reais automaticamente quando elas existem.
+    </li>`;
+    return;
+  }
+
+  names.forEach(name => {
+    const indices = groups[name];
+    const artTrack = indices.map(i => tracks[i]).find(t => t.art);
+    const artistNames = [...new Set(indices.map(i => tracks[i].artist).filter(Boolean))];
+    const trackCountLabel = `${indices.length} faixa${indices.length > 1 ? 's' : ''}`;
+    const metaLabel = artistNames.length === 1 ? `${artistNames[0]} · ${trackCountLabel}` : trackCountLabel;
+
+    const li = document.createElement('li');
+    li.className = 'album-card';
+    li.innerHTML = `
+      <div class="album-cover">
+        <div class="album-disc"></div>
+        <div class="album-art${artTrack ? '' : ' no-art'}"${artTrack ? ` style="background-image:url('${artTrack.art}')"` : ''}>
+          ${artTrack ? '' : '<span class="note-icon">&#9835;</span>'}
+        </div>
+      </div>
+      <div class="album-info">
+        <div class="album-name">${name}</div>
+        <div class="album-meta">${metaLabel}</div>
+      </div>
+    `;
+    li.addEventListener('click', () => openCategoryDetail('album', name, 'screen-albuns'));
+    listAlbuns.appendChild(li);
+  });
+}
+
+function openCategoryDetail(field, value, backTo){
+  currentCategoryFilter = { field, value };
+  categoryDetailTitle.textContent = value;
+  document.querySelector('#screen-category-detail .back-btn').dataset.backTo = backTo;
+  renderCategoryDetail();
+  showScreen('screen-category-detail');
+}
+
+function renderCategoryDetail(){
+  categoryDetailList.innerHTML = '';
+  const { field, value } = currentCategoryFilter;
+  const indices = tracks
+    .map((t, i) => i)
+    .filter(i => tracks[i][field] === value);
+
+  if (!indices.length){
+    categoryDetailList.innerHTML = `<li class="empty-state">Nenhuma faixa encontrada.</li>`;
+    return;
+  }
+  indices.forEach(i => categoryDetailList.appendChild(makeTrackItem(tracks[i], i, indices)));
+}
+
+// Remove acentos para a busca funcionar independente de maiúsculas/acentuação.
+function normalizeSearch(str){
+  return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+let musicSearchQuery = '';
+
+function renderMusicas(){
+  trackList.innerHTML = '';
+
+  if (!tracks.length){
+    countLabel.textContent = '0 faixas';
+    trackList.innerHTML = `<li class="empty-state">
+      Toque em "Adicionar músicas" para escolher uma ou várias faixas do aparelho de uma vez.<br>
+      Nada é enviado para a internet — tudo toca direto do aparelho.
+    </li>`;
+    return;
+  }
+
+  const q = normalizeSearch(musicSearchQuery.trim());
+  const items = tracks.map((t, i) => ({ t, i }));
+  const filtered = q
+    ? items.filter(({ t }) => normalizeSearch(t.name).includes(q) || normalizeSearch(t.artist).includes(q) || normalizeSearch(t.album).includes(q))
+    : items;
+
+  countLabel.textContent = q
+    ? `${filtered.length} de ${tracks.length} faixas`
+    : tracks.length + (tracks.length === 1 ? ' faixa' : ' faixas');
+
+  if (q && !filtered.length){
+    trackList.innerHTML = `<li class="empty-state">Nenhuma música encontrada para "${escapeHtml(musicSearchQuery)}".</li>`;
+    return;
+  }
+
+  const queueIndices = q ? filtered.map(x => x.i) : null;
+  filtered.forEach(({ t, i }) => {
+    trackList.appendChild(makeTrackItem(t, i, queueIndices));
+  });
+}
+
+musicSearchInput.addEventListener('input', () => {
+  musicSearchQuery = musicSearchInput.value;
+  renderMusicas();
+});
+
+// Tocar em sequência / aleatório a partir da tela "Músicas".
+// Se houver busca ativa, toca só o que está filtrado na lista.
+function startMusicasPlayback(shuffle){
+  if (!tracks.length) return;
+  const q = normalizeSearch(musicSearchQuery.trim());
+  const indices = q
+    ? tracks.map((t, i) => i).filter(i => normalizeSearch(tracks[i].name).includes(q) || normalizeSearch(tracks[i].artist).includes(q) || normalizeSearch(tracks[i].album).includes(q))
+    : tracks.map((t, i) => i);
+  if (!indices.length) return;
+
+  playQueue = shuffle ? shuffleArray(indices.slice()) : indices.slice();
+  queuePos = 0;
+  loadTrack(playQueue[0], true);
+  showScreen('screen-player');
+}
+
+musicasPlayBtn.addEventListener('click', () => startMusicasPlayback(false));
+musicasShuffleBtn.addEventListener('click', () => startMusicasPlayback(true));
+
+function groupBy(field){
+  const groups = {};
+  tracks.forEach((t, i) => {
+    const key = t[field] || 'Desconhecido';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(i);
+  });
+  return groups;
+}
+
+function makeTrackItem(t, i, queueIndices){
+  const li = document.createElement('li');
+  li.className = 'track-item' + (i === currentIndex ? ' active' : '');
+  const thumb = t.art
+    ? `<img class="thumb" src="${t.art}" alt="">`
+    : `<span class="idx">${(i+1).toString().padStart(2,'0')}</span>`;
+  li.innerHTML = `${thumb}<span class="name">${t.name}</span>`;
+  li.addEventListener('click', () => {
+    if (queueIndices){
+      playQueue = queueIndices.slice();
+      queuePos = playQueue.indexOf(i);
+    } else {
+      playQueue = null;
+      queuePos = -1;
+    }
+    loadTrack(i, true);
+    showScreen('screen-player');
+  });
+
+  const favBtn = document.createElement('button');
+  favBtn.className = 'fav-btn' + (t.favorite ? ' active' : '');
+  favBtn.title = t.favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
+  favBtn.textContent = t.favorite ? '♥' : '♡';
+  favBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    t.favorite = !t.favorite;
+    dbUpdateTrackFields(t.id, { favorite: t.favorite });
+    renderAll();
+  });
+  li.appendChild(favBtn);
+
+  return li;
+}
+
+/* ---------- Player ---------- */
+
+/* ---------- YouTube: fonte real de áudio/vídeo ----------
+   Quando uma música tem um vídeo do YouTube vinculado, ela toca de verdade
+   a partir do YouTube (vídeo + áudio), mesmo que não exista nenhum arquivo
+   guardado no celular para essa música. O arquivo local (quando existe) só
+   é usado quando a música NÃO tem link do YouTube vinculado. */
+
+// Reconhece links comuns do YouTube (watch, youtu.be, shorts, embed) ou um ID colado direto.
+function extractYoutubeId(input){
+  if (!input) return null;
+  const str = input.trim();
+  const patterns = [
+    /youtu\.be\/([a-zA-Z0-9_-]{6,})/,
+    /[?&]v=([a-zA-Z0-9_-]{6,})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{6,})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{6,})/
+  ];
+  for (const re of patterns){
+    const m = str.match(re);
+    if (m) return m[1];
+  }
+  if (/^[a-zA-Z0-9_-]{6,15}$/.test(str)) return str;
+  return null;
+}
+
+// Busca o título/canal reais do vídeo (oEmbed do YouTube, sem precisar de chave de
+// API) pra confirmar com o usuário antes de vincular — evita vincular vídeo errado.
+async function fetchYoutubeMeta(videoId){
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}&format=json`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return { title: data.title || null, author: data.author_name || null, thumb: data.thumbnail_url || null };
+  } catch(e){
+    return null; // sem internet ou bloqueado: segue sem confirmação de título
+  }
+}
+
+/* --- API oficial do player do YouTube (precisa dela pra tocar o áudio de verdade, sem mudo) --- */
+let ytApiReadyResolve;
+const ytApiReadyPromise = new Promise((resolve) => { ytApiReadyResolve = resolve; });
+window.onYouTubeIframeAPIReady = () => ytApiReadyResolve();
+(function loadYoutubeIframeApi(){
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+})();
+
+let ytPlayer = null;
+let ytPlayerReadyPromise = null;
+let ytPollIntervalId = null;
+
+// Cria o player do YouTube uma única vez e reaproveita pra todas as músicas
+// vinculadas (trocar de vídeo é só carregar um novo ID nele).
+function ensureYtPlayer(){
+  if (ytPlayerReadyPromise) return ytPlayerReadyPromise;
+  ytPlayerReadyPromise = ytApiReadyPromise.then(() => new Promise((resolve) => {
+    ytPlayer = new YT.Player('ytPlayerMount', {
+      height: '100%',
+      width: '100%',
+      playerVars: { playsinline: 1, controls: 0, rel: 0, modestbranding: 1 },
+      events: {
+        onReady: () => resolve(ytPlayer),
+        onStateChange: onYoutubeStateChange
+      }
+    });
+  }));
+  return ytPlayerReadyPromise;
+}
+
+// Quando a música só tem vídeo do YouTube vinculado (sem mp3 guardado), ela
+// sempre toca do YouTube — não tem outra opção. Quando ela tem os dois (mp3 E
+// vídeo), quem decide qual toca é t.preferYoutube: por padrão toca o mp3
+// guardado, e só passa a tocar o vídeo se o usuário ligar isso pelo botão do
+// YouTube na tela do player (funciona igual ao liga/desliga da rádio).
+function isYoutubeTrack(t){
+  if (!t || !t.youtubeId) return false;
+  if (t.url && !t.preferYoutube) return false;
+  return true;
+}
+function currentTrackIsYoutube(){ return currentIndex !== -1 && isYoutubeTrack(tracks[currentIndex]); }
+
+function onYoutubeStateChange(event){
+  if (!currentTrackIsYoutube()) return;
+  if (event.data === YT.PlayerState.PLAYING){
+    onPlaybackStarted();
+    if (!ytPollIntervalId) ytPollIntervalId = setInterval(updateYoutubeTimeUI, 400);
+  } else if (event.data === YT.PlayerState.PAUSED){
+    onPlaybackPaused();
+  } else if (event.data === YT.PlayerState.ENDED){
+    handleTrackEnded();
+  }
+}
+
+function updateYoutubeTimeUI(){
+  if (!ytPlayer || !currentTrackIsYoutube() || isSeeking) return;
+  const dur = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+  const cur = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+  seek.value = dur ? (cur / dur) * 100 : 0;
+  curTime.textContent = formatTime(cur);
+  durTime.textContent = formatTime(dur);
+}
+
+function stopYoutubePlayback(){
+  tvScreen.classList.remove('has-video');
+  ytLinkBtn.classList.remove('linked');
+  if (ytPollIntervalId){ clearInterval(ytPollIntervalId); ytPollIntervalId = null; }
+  if (!ytPlayer) return;
+  // pause/mute/stop sozinhos não garantem silêncio em todo navegador/webview —
+  // o jeito realmente confiável é destruir o player (remove o iframe da
+  // página de vez). Ele é recriado do zero na próxima vez que precisar.
+  try { ytPlayer.destroy(); } catch(e){ /* ignora */ }
+  ytPlayer = null;
+  ytPlayerReadyPromise = null;
+  // destroy() remove o elemento que servia de "ponto de montagem" junto com o
+  // iframe, então recriamos esse ponto vazio pra podermos criar um player novo depois.
+  tvVideo.innerHTML = '';
+  const mount = document.createElement('div');
+  mount.id = 'ytPlayerMount';
+  tvVideo.appendChild(mount);
+}
+
+// Carrega e toca (ou só prepara, sem tocar) o vídeo/áudio vinculado à música atual.
+function loadYoutubeTrack(videoId, autoplay){
+  tvScreen.classList.add('has-video');
+  ytLinkBtn.classList.add('linked');
+  ensureYtPlayer().then((player) => {
+    // Se a música mudou de novo enquanto o player ainda carregava, ignora.
+    if (!currentTrackIsYoutube() || tracks[currentIndex].youtubeId !== videoId) return;
+    try { if (player.unMute) player.unMute(); } catch(e){ /* ignora */ }
+    player.setVolume(Math.round(audio.volume * 100));
+    if (autoplay) player.loadVideoById(videoId);
+    else player.cueVideoById(videoId);
+  });
+}
+
+function enginePlay(){
+  if (currentTrackIsYoutube()){
+    if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo();
+  } else {
+    audio.play();
+  }
+}
+function enginePause(){
+  if (currentTrackIsYoutube()){
+    if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+  } else {
+    audio.pause();
+  }
+}
+
+/* ---------- Rádio 10uilton (stream ao vivo) ---------- */
+const RADIO_URL = 'https://usa3.fastcast4u.com/proxy/radio10uilton?mp=/1';
+const RADIO_ART = 'data:image/jpeg;base64,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';
+let isRadioMode = false;
+
+function updateRadioMediaSession(){
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: 'Rádio 10uilton',
+    artist: 'Ao vivo',
+    album: '10uilton.blogspot.com',
+    artwork: [{ src: RADIO_ART, sizes: '400x400', type: 'image/jpeg' }]
+  });
+  navigator.mediaSession.playbackState = 'playing';
+}
+
+// Depois de sair do modo rádio, devolve a "tela" (LED + televisor) pra faixa
+// que estava carregada antes, sem tentar tocar nada sozinho.
+function restoreNowPlayingUI(){
+  seek.disabled = false;
+  if (currentIndex !== -1 && tracks[currentIndex]){
+    const t = tracks[currentIndex];
+    if (isYoutubeTrack(t)){
+      setLedText(nowTitle, t.youtubeTitle || t.name);
+      setLedText(nowSub, t.youtubeAuthor ? `${t.youtubeAuthor} · YouTube` : 'Tocando do YouTube');
+    } else {
+      setLedText(nowTitle, t.name);
+      setLedText(nowSub, `${t.artist} · ${t.album}`);
+    }
+    if (!isYoutubeTrack(t) && t.art){
+      tvScreen.style.backgroundImage = `url('${t.art}')`;
+      tvScreen.classList.add('has-art');
+    } else {
+      tvScreen.style.backgroundImage = '';
+      tvScreen.classList.remove('has-art');
+      if (!isYoutubeTrack(t)) tvText.textContent = t.name;
+    }
+    updateMediaSessionMetadata(t);
+  } else {
+    setLedText(nowTitle, 'Nenhuma música selecionada');
+    setLedText(nowSub, 'selecione uma faixa no menu');
+    tvScreen.style.backgroundImage = '';
+    tvScreen.classList.remove('has-art');
+    tvText.textContent = '';
+    if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+  }
+}
+
+function startRadio(){
+  // Garante que só uma fonte de áudio toque por vez: para faixa normal e YouTube.
+  if (currentTrackIsYoutube()) stopYoutubePlayback();
+  audio.pause();
+  isRadioMode = true;
+  audio.src = RADIO_URL;
+
+  setLedText(nowTitle, 'Rádio 10uilton');
+  setLedText(nowSub, 'Ao vivo · 10uilton.blogspot.com');
+  tvScreen.style.backgroundImage = `url('${RADIO_ART}')`;
+  tvScreen.classList.add('has-art');
+
+  seek.value = 0;
+  seek.disabled = true;
+  curTime.textContent = 'AO VIVO';
+  durTime.textContent = '';
+
+  radioBtn.classList.add('active');
+  updateRadioMediaSession();
+  audio.play().catch(() => {});
+}
+
+function stopRadio(){
+  isRadioMode = false;
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+  radioBtn.classList.remove('active');
+  restoreNowPlayingUI();
+  // Recoloca o mp3 da faixa atual na tag <audio> (sem tocar sozinho) pra ficar
+  // pronto assim que apertar PLAY — sem isso o áudio ficava sem "src" e o
+  // botão PLAY não fazia nada.
+  if (currentIndex !== -1 && tracks[currentIndex] && !isYoutubeTrack(tracks[currentIndex])){
+    audio.src = tracks[currentIndex].url;
+  }
+  // Garante o ícone de PLAY (▶) no botão, mesmo que o evento "pause" do
+  // áudio não tenha disparado a tempo.
+  onPlaybackPaused();
+}
+
+radioBtn.addEventListener('click', () => {
+  if (isRadioMode) stopRadio();
+  else startRadio();
+});
+
+// Pergunta o link do vídeo (ou abre a busca do YouTube se deixar em branco) para a faixa de índice i.
+// Confirmar aqui sempre LIGA o vídeo (é o jeito de "ligar" quando a música tem mp3 e vídeo).
+async function promptYoutubeForTrack(i){
+  const t = tracks[i];
+  if (!t) return;
+  const query = encodeURIComponent(`${t.artist || ''} ${t.name || ''}`.trim());
+  const current = t.youtubeId ? `https://youtu.be/${t.youtubeId}` : '';
+  const input = await openModal({
+    title: 'Vincular vídeo do YouTube',
+    message: 'Cole o link do vídeo do YouTube desta música.\nDeixe em branco e toque em OK para abrir a busca no YouTube.',
+    withInput: true,
+    inputValue: current,
+    inputPlaceholder: 'https://youtu.be/...',
+    confirmLabel: 'OK',
+    cancelValue: '__YT_CANCELLED__' // sentinela: distingue "cancelou" de "confirmou em branco" (ambos seriam null por padrão)
+  });
+  if (input === '__YT_CANCELLED__') return;
+  const trimmed = (input || '').trim();
+  if (!trimmed){
+    location.href = `https://www.youtube.com/results?search_query=${query}`;
+    return;
+  }
+  const id = extractYoutubeId(trimmed);
+  if (!id){
+    await openModal({
+      title: 'Link inválido',
+      message: 'Não reconheci esse link do YouTube. Copie o link completo do vídeo e tente de novo.',
+      alertOnly: true,
+      confirmLabel: 'Entendi'
+    });
+    return;
+  }
+
+  // Se o link é o mesmo que já estava vinculado, não pergunta a confirmação de
+  // novo — o usuário só quer ligar de volta o vídeo que já tinha.
+  const isNewLink = id !== t.youtubeId;
+  let meta = null;
+  if (isNewLink){
+    meta = await fetchYoutubeMeta(id);
+    if (meta && meta.title){
+      const ok = await openModal({
+        title: 'Vídeo encontrado',
+        message: `"${meta.title}"${meta.author ? ' — ' + meta.author : ''}\n\nVincular a "${t.name}"?`,
+        confirmLabel: 'Vincular'
+      });
+      if (!ok) return;
+    }
+  }
+
+  const wasPlaying = i === currentIndex && (!audio.paused || (ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PLAYING));
+  t.youtubeId = id;
+  if (isNewLink){
+    t.youtubeTitle = (meta && meta.title) ? meta.title : null;
+    t.youtubeAuthor = (meta && meta.author) ? meta.author : null;
+  }
+  t.preferYoutube = true; // confirmar aqui é o jeito de "ligar" o vídeo
+  dbUpdateTrackFields(t.id, { youtubeId: id, youtubeTitle: t.youtubeTitle, youtubeAuthor: t.youtubeAuthor, preferYoutube: true });
+  if (i === currentIndex){
+    loadTrack(i, wasPlaying);
+  }
+  renderAll();
+}
+
+ytLinkBtn.addEventListener('click', () => {
+  if (currentIndex < 0){
+    openModal({
+      title: 'Escolha uma música',
+      message: 'Selecione (ou toque) uma música na lista primeiro — o vídeo do YouTube é vinculado a ela.',
+      alertOnly: true,
+      confirmLabel: 'Entendi'
+    });
+    return;
+  }
+  const t = tracks[currentIndex];
+  if (t && t.url && isYoutubeTrack(t)){
+    // Tá tocando o vídeo agora e a música tem mp3 guardado: desliga o vídeo
+    // direto e volta pro mp3, sem precisar abrir nada — igual à rádio.
+    // Não toca sozinho: fica com o mp3 carregado e o botão em PLAY, igual
+    // acontece quando desliga a rádio.
+    t.preferYoutube = false;
+    dbUpdateTrackFields(t.id, { preferYoutube: false });
+    loadTrack(currentIndex, false);
+    // Garante o ícone de PLAY (▶): destruir o player do YouTube não dispara
+    // o evento de "pausado" sozinho, então o botão podia ficar preso no
+    // ícone de pausa mesmo sem nada tocando.
+    onPlaybackPaused();
+    return;
+  }
+  // Tá desligado (ou nunca foi vinculado): pergunta o link — já vem preenchido
+  // com o que tinha antes, então é só confirmar (OK) pra ligar de novo.
+  promptYoutubeForTrack(currentIndex);
+});
+
+// Reconhece o ID de uma playlist do YouTube a partir do link ("...list=PL...") ou colado direto.
+function extractYoutubePlaylistId(input){
+  if (!input) return null;
+  const str = input.trim();
+  const m = str.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{10,60}$/.test(str)) return str;
+  return null;
+}
+
+// Lê os vídeos de uma playlist pública via feed RSS do YouTube (não precisa de
+// chave de API). Limitação: esse feed só entrega os ~15 vídeos mais recentes
+// da playlist, não a playlist inteira quando ela é maior que isso.
+async function fetchYoutubePlaylistVideos(playlistId){
+  try {
+    const res = await fetch(`https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`);
+    if (!res.ok) return null;
+    const xmlText = await res.text();
+    const xml = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (xml.querySelector('parsererror')) return null;
+
+    const findTag = (node, localName) => {
+      const els = node.getElementsByTagName('*');
+      for (const el of els){
+        if (el.tagName === localName || el.tagName.endsWith(':' + localName)) return el;
+      }
+      return null;
+    };
+
+    const entries = Array.from(xml.getElementsByTagName('entry'));
+    return entries.map(entry => {
+      const videoIdEl = findTag(entry, 'videoId');
+      const titleEl = entry.getElementsByTagName('title')[0];
+      const authorNameEl = findTag(entry, 'name');
+      const thumbEl = findTag(entry, 'thumbnail');
+      const videoId = videoIdEl ? videoIdEl.textContent : null;
+      if (!videoId) return null;
+      return {
+        videoId,
+        title: titleEl ? titleEl.textContent : 'Música do YouTube',
+        author: authorNameEl ? authorNameEl.textContent : 'Artista desconhecido',
+        thumb: thumbEl ? thumbEl.getAttribute('url') : null
+      };
+    }).filter(Boolean);
+  } catch(e){
+    return null;
+  }
+}
+
+function makeYoutubeTrack(videoId, title, artist, art){
+  return {
+    id: 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    name: title,
+    rawName: title,
+    artist: artist,
+    album: 'Álbum desconhecido',
+    genre: 'Gênero desconhecido',
+    folder: 'Sem pasta',
+    folderPath: ['Sem pasta'],
+    playCount: 0,
+    favorite: false,
+    art: art || null,
+    tagsLoaded: true,
+    youtubeId: videoId,
+    youtubeTitle: title,
+    youtubeAuthor: artist,
+    url: null
+  };
+}
+
+// Adiciona uma música só a partir de um link do YouTube, sem precisar de nenhum
+// arquivo de áudio no celular — ela toca direto do YouTube quando selecionada.
+async function addSingleYoutubeTrack(){
+  const input = window.prompt('Cole o link do vídeo do YouTube da música que você quer adicionar:');
+  if (input === null) return;
+  const trimmed = input.trim();
+  if (!trimmed) return;
+  const id = extractYoutubeId(trimmed);
+  if (!id){
+    alert('Não reconheci esse link do YouTube. Copie o link completo do vídeo e tente de novo.');
+    return;
+  }
+
+  const meta = await fetchYoutubeMeta(id);
+  let title, artist, art = null;
+  if (meta && meta.title){
+    artist = meta.author || 'Artista desconhecido';
+    const ok = await openModal({
+      title: 'Vídeo encontrado',
+      message: `"${meta.title}" — ${artist}\n\nAdicionar como música?`,
+      confirmLabel: 'Adicionar'
+    });
+    if (!ok) return;
+    title = meta.title;
+    art = meta.thumb || null;
+  } else {
+    const typed = await openModal({
+      title: 'Nome da música',
+      message: 'Não consegui confirmar o título no YouTube agora. Como quer chamar essa música?',
+      withInput: true,
+      inputPlaceholder: 'Nome da música',
+      confirmLabel: 'Adicionar'
+    });
+    if (!typed) return;
+    title = typed;
+    artist = 'Artista desconhecido';
+  }
+
+  const track = makeYoutubeTrack(id, title, artist, art);
+  tracks.push(track);
+  dbSaveTrack(trackToDBRecord(track, null));
+  renderAll();
+  if (currentIndex === -1) loadTrack(tracks.length - 1, false);
+}
+
+// Adiciona todas as músicas de uma playlist pública do YouTube de uma vez.
+async function addYoutubePlaylist(){
+  const input = window.prompt('Cole o link da playlist do YouTube:');
+  if (input === null) return;
+  const trimmed = input.trim();
+  if (!trimmed) return;
+  const playlistId = extractYoutubePlaylistId(trimmed);
+  if (!playlistId){
+    alert('Não reconheci esse link de playlist. Copie o link completo da playlist (com "list=") e tente de novo.');
+    return;
+  }
+
+  showLoadingOverlay('Buscando as músicas da playlist…', true);
+  const videos = await fetchYoutubePlaylistVideos(playlistId);
+  hideLoadingOverlay();
+
+  if (!videos || !videos.length){
+    await openModal({ title: 'Não encontrei a playlist', message: 'Não consegui ler essa playlist agora. Confira se o link está certo e se a playlist é pública.', alertOnly: true, confirmLabel: 'Entendi' });
+    return;
+  }
+
+  const limitNote = videos.length >= 15
+    ? '\n\n(o YouTube só entrega as ~15 músicas mais recentes da playlist por essa via, sem chave de API — se a playlist for maior, o restante precisa ser adicionado uma a uma)'
+    : '';
+  const ok = await openModal({
+    title: `${videos.length} música(s) encontrada(s)`,
+    message: `Vou adicionar ${videos.length} música(s) dessa playlist à sua biblioteca.${limitNote}`,
+    confirmLabel: 'Adicionar todas'
+  });
+  if (!ok) return;
+
+  videos.forEach(v => {
+    const track = makeYoutubeTrack(v.videoId, v.title, v.author, v.thumb);
+    tracks.push(track);
+    dbSaveTrack(trackToDBRecord(track, null));
+  });
+  renderAll();
+  if (currentIndex === -1 && tracks.length) loadTrack(0, false);
+}
+
+function loadTrack(i, autoplay){
+  if (i < 0 || i >= tracks.length) return;
+  const wasRadioMode = isRadioMode;
+  // Se a rádio ao vivo estiver tocando, sai desse modo antes de carregar a faixa.
+  // Importante: só "pausar" um stream ao vivo às vezes não corta o som na hora
+  // (o navegador/webview ainda toca um pedaço que já tinha em buffer) — por
+  // isso paramos de verdade aqui (pause + remove src + load) antes de seguir
+  // pra carregar a música nova, senão a rádio continua tocando por cima dela.
+  if (isRadioMode){
+    isRadioMode = false;
+    radioBtn.classList.remove('active');
+    seek.disabled = false;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+  }
+  const t = tracks[i];
+  const isYt = isYoutubeTrack(t);
+  const sourceSwitched = i === currentIndex && lastLoadedWasYt !== null && lastLoadedWasYt !== isYt;
+  const wasSameTrack = !wasRadioMode && i === currentIndex && !sourceSwitched && (isYt ? true : audio.src === t.url);
+  currentIndex = i;
+  lastLoadedWasYt = isYt;
+
+  if (!wasSameTrack){
+    // Troca de música: garante que só uma fonte de áudio toque de cada vez.
+    audio.pause();
+    if (isYt){
+      audio.removeAttribute('src');
+    } else {
+      audio.src = t.url;
+    }
+    stopYoutubePlayback();
+  }
+
+  localStorage.setItem(LAST_TRACK_KEY, t.id);
+  if (isYt){
+    setLedText(nowTitle, t.youtubeTitle || t.name);
+    setLedText(nowSub, t.youtubeAuthor ? `${t.youtubeAuthor} · YouTube` : 'Tocando do YouTube');
+  } else {
+    setLedText(nowTitle, t.name);
+    setLedText(nowSub, `${t.artist} · ${t.album}`);
+  }
+
+  if (!isYt && t.art){
+    tvScreen.style.backgroundImage = `url('${t.art}')`;
+    tvScreen.classList.add('has-art');
+  } else {
+    tvScreen.style.backgroundImage = '';
+    tvScreen.classList.remove('has-art');
+    if (!isYt) tvText.textContent = t.name;
+  }
+
+  if (isYt && !wasSameTrack) loadYoutubeTrack(t.youtubeId, autoplay);
+
+  // Só conta como "tocada" quando o usuário de fato manda tocar uma faixa nova
+  // (não ao reabrir o app ou ao atualizar metadados de uma faixa já carregada).
+  if (autoplay && !wasSameTrack){
+    t.playCount = (t.playCount || 0) + 1;
+    dbUpdateTrackFields(t.id, { playCount: t.playCount });
+  }
+
+  updateMediaSessionMetadata(t);
+  renderAll();
+  if (autoplay && !wasSameTrack && !isYt) audio.play();
+}
+
+// Controles na tela de bloqueio / notificação do sistema (Android/iOS/desktop).
+function updateMediaSessionMetadata(t){
+  if (!('mediaSession' in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: t.name,
+    artist: t.artist,
+    album: t.album,
+    artwork: t.art ? [{ src: t.art, sizes: '512x512', type: 'image/png' }] : []
+  });
+}
+
+if ('mediaSession' in navigator){
+  navigator.mediaSession.setActionHandler('play', () => enginePlay());
+  navigator.mediaSession.setActionHandler('pause', () => enginePause());
+  navigator.mediaSession.setActionHandler('previoustrack', () => prevBtn.click());
+  navigator.mediaSession.setActionHandler('nexttrack', () => nextBtn.click());
+  navigator.mediaSession.setActionHandler('seekto', (details) => {
+    if (details.seekTime == null) return;
+    if (isRadioMode) return;
+    if (currentTrackIsYoutube()){
+      if (ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(details.seekTime, true);
+    } else if (audio.duration){
+      audio.currentTime = details.seekTime;
+    }
+  });
+}
+
+playBtn.addEventListener('click', () => {
+  if (isRadioMode){
+    if (audio.paused) audio.play(); else audio.pause();
+    return;
+  }
+  if (currentIndex === -1) {
+    if (tracks.length) loadTrack(0, true);
+    return;
+  }
+  if (currentTrackIsYoutube()){
+    if (!ytPlayer || !ytPlayer.getPlayerState) return; // API ainda carregando
+    const state = ytPlayer.getPlayerState();
+    if (state === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+    else ytPlayer.playVideo();
+  } else {
+    if (audio.paused) audio.play();
+    else audio.pause();
+  }
+});
+
+function goRelative(delta){
+  if (isRadioMode) return; // rádio ao vivo não tem próxima/anterior faixa
+  if (!tracks.length) return;
+  if (playQueue && playQueue.length){
+    queuePos = (queuePos + delta + playQueue.length) % playQueue.length;
+    loadTrack(playQueue[queuePos], true);
+  } else {
+    const i = (currentIndex + delta + tracks.length) % tracks.length;
+    loadTrack(i, true);
+  }
+}
+
+prevBtn.addEventListener('click', () => goRelative(-1));
+nextBtn.addEventListener('click', () => goRelative(1));
+
+function shuffleArray(arr){
+  for (let i = arr.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// Toca todas as faixas do álbum/artista/gênero aberto no momento, em ordem ou embaralhadas.
+function startCategoryPlayback(shuffle){
+  const { field, value } = currentCategoryFilter;
+  if (!field) return;
+  const indices = tracks.map((t, i) => i).filter(i => tracks[i][field] === value);
+  if (!indices.length) return;
+
+  playQueue = shuffle ? shuffleArray(indices.slice()) : indices.slice();
+  queuePos = 0;
+  loadTrack(playQueue[0], true);
+  showScreen('screen-player');
+}
+
+categoryPlayBtn.addEventListener('click', () => startCategoryPlayback(false));
+categoryShuffleBtn.addEventListener('click', () => startCategoryPlayback(true));
+
+// Aleatório na tela do player: liga/desliga o modo aleatório.
+// Enquanto estiver ligado (classe "active"), o botão fica amarelo;
+// ao ligar, já embaralha a ordem de reprodução a partir da faixa atual.
+let shuffleModeOn = false;
+shuffleBtnPlayer.addEventListener('click', () => {
+  shuffleModeOn = !shuffleModeOn;
+  shuffleBtnPlayer.classList.toggle('active', shuffleModeOn);
+
+  if (!shuffleModeOn) return;
+  if (!tracks.length) return;
+  const base = playQueue && playQueue.length ? playQueue : tracks.map((t, i) => i);
+  const rest = base.filter(i => i !== currentIndex);
+  shuffleArray(rest);
+  playQueue = currentIndex !== -1 ? [currentIndex, ...rest] : shuffleArray(base.slice());
+  queuePos = 0;
+});
+
+// Scratch: efeito de "disco engasgando" — a agulha fica repetindo o mesmo
+// trechinho bem rápido, como quando o vinil trava, e depois volta ao normal.
+let isScratching = false;
+scratchBtn.addEventListener('click', () => {
+  if (currentTrackIsYoutube()){
+    openModal({ title: 'Scratch indisponível', message: 'O efeito de scratch só funciona com músicas guardadas no celular, não com vídeos do YouTube.', alertOnly: true, confirmLabel: 'Entendi' });
+    return;
+  }
+  if (isRadioMode){
+    openModal({ title: 'Scratch indisponível', message: 'O efeito de scratch não funciona durante a rádio ao vivo.', alertOnly: true, confirmLabel: 'Entendi' });
+    return;
+  }
+  if (!audio.src || isScratching) return;
+  isScratching = true;
+
+  const original = audio.currentTime;
+  const wasPlaying = !audio.paused;
+  platterL.classList.add('scratching');
+  platterR.classList.add('scratching');
+  tonearmL.classList.add('skipping');
+  tonearmR.classList.add('skipping');
+  tvScreen.classList.add('glitching');
+  if (!wasPlaying) audio.play();
+
+  let tick = 0;
+  const totalTicks = 10;
+  const stutterInterval = setInterval(() => {
+    tick++;
+    audio.currentTime = original;
+    if (tick >= totalTicks){
+      clearInterval(stutterInterval);
+      audio.currentTime = original;
+      platterL.classList.remove('scratching');
+      platterR.classList.remove('scratching');
+      tonearmL.classList.remove('skipping');
+      tonearmR.classList.remove('skipping');
+      tvScreen.classList.remove('glitching');
+      isScratching = false;
+      if (!wasPlaying) audio.pause();
+    }
+  }, 85);
+});
+
+function onPlaybackStarted(){
+  playBtn.textContent = '❚❚';
+  platterL.classList.add('playing');
+  platterR.classList.add('playing');
+  tonearmL.classList.add('down');
+  tonearmR.classList.add('down');
+  powerLed.classList.add('on');
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+}
+function onPlaybackPaused(){
+  playBtn.textContent = '▶';
+  platterL.classList.remove('playing');
+  platterR.classList.remove('playing');
+  tonearmL.classList.remove('down');
+  tonearmR.classList.remove('down');
+  powerLed.classList.remove('on');
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+}
+audio.addEventListener('play', onPlaybackStarted);
+audio.addEventListener('pause', onPlaybackPaused);
+
+/* ---------- Repetir ---------- */
+// 'off' = para no fim da lista | 'all' = volta ao início (padrão anterior) | 'one' = repete a faixa atual
+let repeatMode = localStorage.getItem('musicaPlay10_repeatMode') || 'off';
+
+function updateRepeatBtnUI(){
+  repeatBtn.classList.remove('repeat-all', 'repeat-one');
+  if (repeatMode === 'all') repeatBtn.classList.add('repeat-all');
+  else if (repeatMode === 'one') repeatBtn.classList.add('repeat-one');
+  repeatBtn.title = repeatMode === 'off' ? 'Repetir: desativado'
+    : repeatMode === 'all' ? 'Repetir: tudo'
+    : 'Repetir: uma faixa';
+}
+repeatBtn.addEventListener('click', () => {
+  repeatMode = repeatMode === 'off' ? 'all' : repeatMode === 'all' ? 'one' : 'off';
+  localStorage.setItem('musicaPlay10_repeatMode', repeatMode);
+  updateRepeatBtnUI();
+});
+updateRepeatBtnUI();
+
+function handleTrackEnded(){
+  if (isRadioMode){
+    // Streams ao vivo raramente disparam "ended", mas se cair a conexão,
+    // tenta reconectar automaticamente.
+    audio.play().catch(() => {});
+    return;
+  }
+  if (repeatMode === 'one'){
+    if (currentTrackIsYoutube()){
+      if (ytPlayer && ytPlayer.seekTo) ytPlayer.seekTo(0, true);
+      if (ytPlayer && ytPlayer.playVideo) ytPlayer.playVideo();
+    } else {
+      audio.currentTime = 0;
+      audio.play();
+    }
+    return;
+  }
+  const atEndOfQueue = (playQueue && playQueue.length)
+    ? queuePos >= playQueue.length - 1
+    : currentIndex >= tracks.length - 1;
+  if (repeatMode === 'off' && atEndOfQueue){
+    enginePause();
+    if (!currentTrackIsYoutube()) audio.currentTime = 0;
+    return;
+  }
+  nextBtn.click();
+}
+audio.addEventListener('ended', handleTrackEnded);
+
+audio.addEventListener('timeupdate', () => {
+  if (isSeeking) return;
+  if (isRadioMode){
+    seek.value = 0;
+    curTime.textContent = 'AO VIVO';
+    durTime.textContent = '';
+    return;
+  }
+  seek.value = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+  curTime.textContent = formatTime(audio.currentTime);
+  durTime.textContent = formatTime(audio.duration);
+});
+
+seek.addEventListener('input', () => { isSeeking = true; });
+seek.addEventListener('change', () => {
+  if (isRadioMode){ isSeeking = false; return; }
+  if (currentTrackIsYoutube()){
+    if (ytPlayer && ytPlayer.getDuration){
+      const dur = ytPlayer.getDuration();
+      if (dur) ytPlayer.seekTo((seek.value / 100) * dur, true);
+    }
+  } else if (audio.duration){
+    audio.currentTime = (seek.value / 100) * audio.duration;
+  }
+  isSeeking = false;
+});
+
+function adjustVolume(delta){
+  const next = Math.min(1, Math.max(0, Math.round((audio.volume + delta) * 100) / 100));
+  audio.volume = next;
+  if (ytPlayer && ytPlayer.setVolume) ytPlayer.setVolume(Math.round(next * 100));
+}
+volDownBtn.addEventListener('click', () => adjustVolume(-0.1));
+volUpBtn.addEventListener('click', () => adjustVolume(0.1));
+
+/* ---------- Timer para dormir ---------- */
+let sleepTimeoutId = null;
+let sleepIntervalId = null;
+let sleepEndTime = null;
+
+function formatSleepRemaining(ms){
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function updateSleepStatus(){
+  if (!sleepEndTime){
+    sleepStatus.textContent = 'Nenhum timer ativo.';
+    return;
+  }
+  const remaining = sleepEndTime - Date.now();
+  if (remaining <= 0){
+    sleepStatus.textContent = 'Nenhum timer ativo.';
+    return;
+  }
+  sleepStatus.textContent = `A música vai pausar em ${formatSleepRemaining(remaining)}`;
+}
+
+function clearSleepTimer(){
+  if (sleepTimeoutId) clearTimeout(sleepTimeoutId);
+  if (sleepIntervalId) clearInterval(sleepIntervalId);
+  sleepTimeoutId = null;
+  sleepIntervalId = null;
+  sleepEndTime = null;
+  updateSleepStatus();
+}
+
+function startSleepTimer(minutes){
+  clearSleepTimer();
+  sleepEndTime = Date.now() + minutes * 60000;
+  sleepTimeoutId = setTimeout(() => {
+    enginePause();
+    clearSleepTimer();
+  }, minutes * 60000);
+  sleepIntervalId = setInterval(updateSleepStatus, 1000);
+  updateSleepStatus();
+}
+
+document.querySelectorAll('.eq-preset-btn[data-sleep]').forEach(btn => {
+  btn.addEventListener('click', () => startSleepTimer(Number(btn.dataset.sleep)));
+});
+sleepCancelBtn.addEventListener('click', clearSleepTimer);
+
+sleepTimerMenuBtn.addEventListener('click', () => {
+  updateSleepStatus();
+  sleepOverlay.classList.add('open');
+  menuOverlay.classList.remove('open');
+});
+sleepCloseBtn.addEventListener('click', () => sleepOverlay.classList.remove('open'));
+sleepOverlay.addEventListener('click', (e) => {
+  if (e.target === sleepOverlay) sleepOverlay.classList.remove('open');
+});
+
+/* ---------- Equalizador ---------- */
+// Chave para salvar os níveis do EQ, seguindo o mesmo padrão das outras chaves do app.
+const EQ_KEY = 'musicaPlay10_eq';
+
+let audioCtx = null;
+let eqSource = null;
+let eqBassFilter = null;
+let eqMidFilter = null;
+let eqTrebleFilter = null;
+
+// O Web Audio API só pode ser criado após uma interação do usuário (política
+// dos navegadores), então montamos o grafo de áudio só quando necessário.
+function ensureEqGraph(){
+  if (audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return; // navegador sem suporte: EQ fica só visual, áudio toca normal
+
+  audioCtx = new AC();
+  eqSource = audioCtx.createMediaElementSource(audio);
+
+  eqBassFilter = audioCtx.createBiquadFilter();
+  eqBassFilter.type = 'lowshelf';
+  eqBassFilter.frequency.value = 200;
+
+  eqMidFilter = audioCtx.createBiquadFilter();
+  eqMidFilter.type = 'peaking';
+  eqMidFilter.frequency.value = 1000;
+  eqMidFilter.Q.value = 1;
+
+  eqTrebleFilter = audioCtx.createBiquadFilter();
+  eqTrebleFilter.type = 'highshelf';
+  eqTrebleFilter.frequency.value = 3000;
+
+  eqSource.connect(eqBassFilter);
+  eqBassFilter.connect(eqMidFilter);
+  eqMidFilter.connect(eqTrebleFilter);
+  eqTrebleFilter.connect(audioCtx.destination);
+
+  applyEqValues();
+}
+
+function applyEqValues(){
+  if (!audioCtx) return;
+  eqBassFilter.gain.value = Number(eqBass.value);
+  eqMidFilter.gain.value = Number(eqMid.value);
+  eqTrebleFilter.gain.value = Number(eqTreble.value);
+}
+
+function updateEqLabels(){
+  eqValBass.textContent = `${eqBass.value > 0 ? '+' : ''}${eqBass.value}dB`;
+  eqValMid.textContent = `${eqMid.value > 0 ? '+' : ''}${eqMid.value}dB`;
+  eqValTreble.textContent = `${eqTreble.value > 0 ? '+' : ''}${eqTreble.value}dB`;
+}
+
+function saveEqValues(){
+  localStorage.setItem(EQ_KEY, JSON.stringify({
+    bass: eqBass.value, mid: eqMid.value, treble: eqTreble.value
+  }));
+}
+
+function updateEqBtnState(){
+  const isFlat = Number(eqBass.value) === 0 && Number(eqMid.value) === 0 && Number(eqTreble.value) === 0;
+  eqBtn.classList.toggle('active', !isFlat);
+}
+
+function loadEqValues(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(EQ_KEY));
+    if (saved){
+      eqBass.value = saved.bass ?? 0;
+      eqMid.value = saved.mid ?? 0;
+      eqTreble.value = saved.treble ?? 0;
+    }
+  } catch(e){ /* ignora e mantém os valores padrão */ }
+  updateEqLabels();
+  updateEqBtnState();
+}
+
+[eqBass, eqMid, eqTreble].forEach(slider => {
+  slider.addEventListener('input', () => {
+    ensureEqGraph();
+    applyEqValues();
+    updateEqLabels();
+    updateEqBtnState();
+    saveEqValues();
+    document.querySelectorAll('.eq-preset-btn').forEach(b => b.classList.remove('selected'));
+  });
+});
+
+const EQ_PRESETS = {
+  flat:   { bass: 0, mid: 0, treble: 0 },
+  bass:   { bass: 8, mid: 0, treble: -2 },
+  vocal:  { bass: -3, mid: 6, treble: 2 },
+  treble: { bass: -2, mid: 0, treble: 8 },
+};
+
+document.querySelectorAll('.eq-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = EQ_PRESETS[btn.dataset.preset];
+    if (!p) return;
+    ensureEqGraph();
+    eqBass.value = p.bass;
+    eqMid.value = p.mid;
+    eqTreble.value = p.treble;
+    applyEqValues();
+    updateEqLabels();
+    updateEqBtnState();
+    saveEqValues();
+    document.querySelectorAll('.eq-preset-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+  });
+});
+
+eqBtn.addEventListener('click', () => {
+  if (currentTrackIsYoutube()){
+    openModal({ title: 'Equalizador indisponível', message: 'O equalizador só funciona com músicas guardadas no celular. Vídeos do YouTube tocam com o áudio original, sem esse ajuste.', alertOnly: true, confirmLabel: 'Entendi' });
+    return;
+  }
+  if (isRadioMode){
+    openModal({ title: 'Equalizador indisponível', message: 'O equalizador não funciona durante a rádio ao vivo. Ele só ajusta músicas guardadas no celular.', alertOnly: true, confirmLabel: 'Entendi' });
+    return;
+  }
+  ensureEqGraph();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  eqOverlay.classList.add('open');
+});
+eqCloseBtn.addEventListener('click', () => eqOverlay.classList.remove('open'));
+eqOverlay.addEventListener('click', (e) => {
+  if (e.target === eqOverlay) eqOverlay.classList.remove('open');
+});
+
+loadEqValues();
+
+function formatTime(t){
+  if (!t || isNaN(t)) return '0:00';
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+loadPersistedTracks();
+loadPersistedPlaylists();
+</script>
+</body>
+</html>
